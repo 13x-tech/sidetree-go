@@ -182,7 +182,7 @@ func (d *DIDDocData) RemoveServices(services []string) error {
 
 type DIDKeyInfo struct {
 	ID         string                 `json:"id"`
-	Controller string                 `json:"controller"`
+	Controller string                 `json:"controller,omitempty"`
 	Type       string                 `json:"type"`
 	PubKey     map[string]interface{} `json:"publicKeyJwk,omitempty"`
 	Multibase  string                 `json:"publicKeyMultibase,omitempty"`

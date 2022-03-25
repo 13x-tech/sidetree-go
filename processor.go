@@ -251,23 +251,32 @@ func (d *OperationsProcessor) createDID(id string, recoverCommitment string) err
 }
 
 func (d *OperationsProcessor) patchDelta(id string, patch Patch) error {
+	d.log.Infof("Patching: %+v", patch)
 	switch op := patch.(type) {
 	case Replace:
+		d.log.Info("patching replace")
 		return d.replaceDocEntries(id, op)
 	case AddPublicKeys:
+		d.log.Info("patching add public keys")
 		return d.addPublicKeys(id, op)
 	case AddServices:
+		d.log.Info("patching add services")
 		return d.addServices(id, op)
 	case Remove:
+		d.log.Info("patching remove")
 		switch op.Action {
 		case "remove-public-keys":
+			d.log.Info("patching remove public keys")
 			return d.removePublicKeys(id, op)
 		case "remove-services":
+			d.log.Info("patching remove services")
 			return d.removeServices(id, op)
 		default:
+			d.log.Info("patching remove unknown")
 			return fmt.Errorf("unknown action: %s", op.Action)
 		}
 	case IETFJSON:
+		d.log.Info("patching ietf-json")
 		return fmt.Errorf("ietf unsupported: %+v", op)
 	default:
 		return fmt.Errorf("unknown patch action: %+v", op)
