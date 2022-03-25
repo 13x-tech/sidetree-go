@@ -343,10 +343,20 @@ func (d *OperationsProcessor) removePublicKeys(id string, patch map[string]inter
 		return fmt.Errorf("%s failed to get DID for remove-public-key: %w", id, err)
 	}
 
-	pubKeys, ok := patch["ids"].([]string)
+	pKeyInterfaces, ok := patch["ids"].([]interface{})
 	if !ok {
-		return fmt.Errorf("%s patch does not have publicKeys: %s", id, patch)
+		return fmt.Errorf("%s patch does not have publicKey ids: %s", id, patch)
 	} else {
+
+		var pubKeys []string
+		for _, pubKey := range pKeyInterfaces {
+			key, ok := pubKey.(string)
+			if !ok {
+				return fmt.Errorf("%s patch pubKey ids do not cast to string: %s", doc.DIDDocument.ID, patch)
+			}
+			pubKeys = append(pubKeys, key)
+		}
+
 		if err := doc.DIDDocument.RemovePublicKeys(pubKeys); err != nil {
 			return fmt.Errorf("%s failed to remove public keys: %w", id, err)
 		} else {
@@ -380,10 +390,20 @@ func (d *OperationsProcessor) removeServices(id string, patch map[string]interfa
 		return fmt.Errorf("%s failed to get DID for remove-service: %w", id, err)
 	}
 
-	services, ok := patch["ids"].([]string)
+	sInterfaces, ok := patch["ids"].([]interface{})
 	if !ok {
-		return fmt.Errorf("%s patch does not have services: %s", doc.DIDDocument.ID, patch)
+		return fmt.Errorf("%s patch does not have service ids: %s", doc.DIDDocument.ID, patch)
 	} else {
+
+		var services []string
+		for _, s := range sInterfaces {
+			service, ok := s.(string)
+			if !ok {
+				return fmt.Errorf("%s patch service ids do not cast to string: %s", doc.DIDDocument.ID, patch)
+			}
+			services = append(services, service)
+		}
+
 		if err := doc.DIDDocument.RemoveServices(services); err != nil {
 			return fmt.Errorf("%s failed to remove services: %w", doc.DIDDocument.ID, err)
 		} else {
