@@ -17,7 +17,7 @@ type SideTree interface {
 	Process() error
 }
 
-type IndexerConfig struct {
+type Config struct {
 	Logger              Logger
 	ChainService        Service
 	Storage             Storage
@@ -28,7 +28,7 @@ type IndexerConfig struct {
 
 type SideTreeIndexer struct {
 	log        Logger
-	config     IndexerConfig
+	config     Config
 	srv        Service
 	bestBlock  int64
 	indexStore Indexer
@@ -37,7 +37,7 @@ type SideTreeIndexer struct {
 	blockGuard chan struct{}
 }
 
-func NewIndexer(config IndexerConfig) SideTree {
+func New(config Config) SideTree {
 
 	cas, err := config.Storage.CAS()
 	if err != nil {
