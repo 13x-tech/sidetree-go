@@ -64,6 +64,7 @@ func New(config Config) SideTree {
 
 func (d *SideTreeIndexer) Index() error {
 	d.log.Info("Starting to index...")
+	d.log.Info("Will print status every 100 blocks")
 
 	startTime := time.Now()
 
@@ -99,6 +100,10 @@ func (d *SideTreeIndexer) Index() error {
 }
 
 func (d *SideTreeIndexer) processBlock(blockheigt int64) error {
+	if blockheigt%100 == 0 {
+		d.log.Infof("Processing block %d...\n", blockheigt)
+	}
+
 	defer d.wg.Done()
 	defer func() {
 		<-d.blockGuard
@@ -162,6 +167,9 @@ func (d *SideTreeIndexer) checkSignature(b []byte) bool {
 
 func (d *SideTreeIndexer) Process() error {
 	for i := d.config.StartBlock; i <= d.bestBlock; i++ {
+		if i%100 == 0 {
+			d.log.Infof("Processing operations for block %d...\n", i)
+		}
 		ops, err := d.indexStore.GetBlockOps(i)
 		if err != nil {
 			return fmt.Errorf("failed to get block ops for height %d: %w", i, err)
