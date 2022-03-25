@@ -250,67 +250,46 @@ func (d *OperationsProcessor) createDID(id string, recoverCommitment string) err
 	return nil
 }
 
-func (d *OperationsProcessor) patchDelta(id string, patch map[string]interface{}) error {
-	action, ok := patch["action"]
-	if !ok {
-		return fmt.Errorf("%s patch does not have action: %s", id, patch)
-	}
-	switch action {
-	case "replace":
-		if err := d.replaceDocEntries(id, patch); err != nil {
-			return fmt.Errorf("failed to replace doc entries for %s: %w", id, err)
+func (d *OperationsProcessor) patchDelta(id string, patch Patch) error {
+	switch op := patch.(type) {
+	case Replace:
+		return d.replaceDocEntries(id, op)
+	case AddPublicKeys:
+		return d.addPublicKeys(id, op)
+	case AddServices:
+		return d.addServices(id, op)
+	case Remove:
+		switch op.Action {
+		case "remove-public-keys":
+			return d.removePublicKeys(id, op)
+		case "remove-services":
+			return d.removeServices(id, op)
+		default:
+			return fmt.Errorf("unknown action: %s", op.Action)
 		}
-		return nil
-	case "add-public-keys":
-		if err := d.addPublicKeys(id, patch); err != nil {
-			return fmt.Errorf("failed to add public keys to %s: %w", id, err)
-		}
-		return nil
-	case "remove-public-keys":
-		if err := d.removePublicKeys(id, patch); err != nil {
-			return fmt.Errorf("%s failed to remove public keys: %w", id, err)
-		}
-		return nil
-	case "add-services":
-		if err := d.addServices(id, patch); err != nil {
-			return fmt.Errorf("%s failed to add services: %w", id, err)
-		}
-		return nil
-	case "remove-services":
-		if err := d.removeServices(id, patch); err != nil {
-			return fmt.Errorf("%s failed to remove services: %w", id, err)
-		}
-		return nil
-	case "ietf-json-patch":
-		if err := d.ietfJSONPatch(id, patch); err != nil {
-			return fmt.Errorf("failed to ietf json patch %s: %w", id, err)
-		}
-		return nil
+	case IETFJSON:
+		return fmt.Errorf("ietf unsupported: %+v", op)
 	default:
-		return fmt.Errorf("%s unknown patch type: %s", id, patch)
+		return fmt.Errorf("unknown patch action: %+v", op)
 	}
 }
 
-func (d *OperationsProcessor) replaceDocEntries(id string, patch map[string]interface{}) error {
+func (d *OperationsProcessor) replaceDocEntries(id string, patch Replace) error {
 
 	didDoc, err := d.didStore.Get(id)
 	if err != nil {
 		return fmt.Errorf("failed to get did document: %w", err)
 	}
 
-	doc, ok := patch["document"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("%s patch does not have document: %+v", id, patch)
-	}
-
+	doc := patch.Document
 	didDoc.DIDDocument.ResetData()
 
-	publicKeys, err := processKeys(id, doc)
+	publicKeys, err := processKeys(id, doc.PublicKeys)
 	if err == nil {
 		didDoc.DIDDocument.AddPublicKeys(publicKeys)
 	}
 
-	didServices, err := processServices(doc)
+	didServices, err := processServices(doc.Services)
 	if err == nil {
 		didDoc.DIDDocument.AddServices(didServices)
 	}
@@ -322,62 +301,33 @@ func (d *OperationsProcessor) replaceDocEntries(id string, patch map[string]inte
 	return nil
 }
 
-func (d *OperationsProcessor) addPublicKeys(id string, patch map[string]interface{}) error {
+func (d *OperationsProcessor) addPublicKeys(id string, patch AddPublicKeys) error {
 	doc, err := d.didStore.Get(id)
 	if err != nil {
 		return fmt.Errorf("%s failed to get DID for add-public-key: %w", id, err)
 	}
-	pubKeys, err := processKeys(id, patch)
-	if err == nil {
-		doc.DIDDocument.AddPublicKeys(pubKeys)
-		if err := d.didStore.Put(doc); err != nil {
-			return fmt.Errorf("%s failed to put DID: %w", id, err)
-		}
+
+	pubKeys, err := processKeys(id, patch.PublicKeys)
+	if err != nil {
+		return fmt.Errorf("%s failed to process public keys: %w", id, err)
+	}
+	doc.DIDDocument.AddPublicKeys(pubKeys)
+	if err := d.didStore.Put(doc); err != nil {
+		return fmt.Errorf("%s failed to put DID: %w", id, err)
 	}
 	return nil
 }
 
-func (d *OperationsProcessor) removePublicKeys(id string, patch map[string]interface{}) error {
+func (d *OperationsProcessor) removePublicKeys(id string, patch Remove) error {
 
 	doc, err := d.didStore.Get(id)
 	if err != nil {
 		return fmt.Errorf("%s failed to get DID for remove-public-key: %w", id, err)
 	}
 
-	pKeyInterfaces, ok := patch["ids"].([]interface{})
-	if !ok {
-		return fmt.Errorf("%s patch does not have publicKey ids: %s", id, patch)
+	if err := doc.DIDDocument.RemovePublicKeys(patch.Ids); err != nil {
+		return fmt.Errorf("%s failed to remove public keys: %w", id, err)
 	} else {
-
-		var pubKeys []string
-		for _, pubKey := range pKeyInterfaces {
-			key, ok := pubKey.(string)
-			if !ok {
-				return fmt.Errorf("%s patch pubKey ids do not cast to string: %s", doc.DIDDocument.ID, patch)
-			}
-			pubKeys = append(pubKeys, key)
-		}
-
-		if err := doc.DIDDocument.RemovePublicKeys(pubKeys); err != nil {
-			return fmt.Errorf("%s failed to remove public keys: %w", id, err)
-		} else {
-			if err := d.didStore.Put(doc); err != nil {
-				return fmt.Errorf("%s failed to put DID: %w", id, err)
-			}
-		}
-	}
-	return nil
-}
-
-func (d *OperationsProcessor) addServices(id string, patch map[string]interface{}) error {
-	doc, err := d.didStore.Get(id)
-	if err != nil {
-		return fmt.Errorf("%s failed to get DID for add-service: %w", id, err)
-	}
-
-	services, err := processServices(patch)
-	if err == nil {
-		doc.DIDDocument.AddServices(services)
 		if err := d.didStore.Put(doc); err != nil {
 			return fmt.Errorf("%s failed to put DID: %w", id, err)
 		}
@@ -385,39 +335,36 @@ func (d *OperationsProcessor) addServices(id string, patch map[string]interface{
 	return nil
 }
 
-func (d *OperationsProcessor) removeServices(id string, patch map[string]interface{}) error {
+func (d *OperationsProcessor) addServices(id string, patch AddServices) error {
+	doc, err := d.didStore.Get(id)
+	if err != nil {
+		return fmt.Errorf("%s failed to get DID for add-service: %w", id, err)
+	}
+
+	services, err := processServices(patch.Services)
+	if err != nil {
+		return fmt.Errorf("%s failed to process services: %w", id, err)
+	}
+	doc.DIDDocument.AddServices(services)
+	if err := d.didStore.Put(doc); err != nil {
+		return fmt.Errorf("%s failed to put DID: %w", id, err)
+	}
+	return nil
+}
+
+func (d *OperationsProcessor) removeServices(id string, patch Remove) error {
 	doc, err := d.didStore.Get(id)
 	if err != nil {
 		return fmt.Errorf("%s failed to get DID for remove-service: %w", id, err)
 	}
 
-	sInterfaces, ok := patch["ids"].([]interface{})
-	if !ok {
-		return fmt.Errorf("%s patch does not have service ids: %s", doc.DIDDocument.ID, patch)
+	if err := doc.DIDDocument.RemoveServices(patch.Ids); err != nil {
+		return fmt.Errorf("%s failed to remove services: %w", doc.DIDDocument.ID, err)
 	} else {
-
-		var services []string
-		for _, s := range sInterfaces {
-			service, ok := s.(string)
-			if !ok {
-				return fmt.Errorf("%s patch service ids do not cast to string: %s", doc.DIDDocument.ID, patch)
-			}
-			services = append(services, service)
-		}
-
-		if err := doc.DIDDocument.RemoveServices(services); err != nil {
-			return fmt.Errorf("%s failed to remove services: %w", doc.DIDDocument.ID, err)
-		} else {
-			if err := d.didStore.Put(doc); err != nil {
-				return fmt.Errorf("%s failed to put DID: %w", doc.DIDDocument.ID, err)
-			}
+		if err := d.didStore.Put(doc); err != nil {
+			return fmt.Errorf("%s failed to put DID: %w", doc.DIDDocument.ID, err)
 		}
 	}
-	return nil
-}
-
-func (d *OperationsProcessor) ietfJSONPatch(id string, patch map[string]interface{}) error {
-	fmt.Printf("%s ietf-json not supported: %s\n", id, patch)
 	return nil
 }
 
@@ -449,96 +396,31 @@ func (d *OperationsProcessor) getUpdateCommitment(id string) (string, error) {
 	return didDoc.Metadata.Method.UpdateCommitment, nil
 }
 
-func (p *OperationsProcessor) populateDeltaMappingArray() error {
-	coreIndex := p.CoreIndexFile
-	if coreIndex == nil {
-		return fmt.Errorf("core index file is nil")
-	}
+func processKeys(id string, patch []DIDKeyInfo) ([]DIDKeyInfo, error) {
 
-	provisionalIndex := p.ProvisionalIndexFile
-	if provisionalIndex == nil {
-		return fmt.Errorf("provisional index file is nil")
-	}
-
-	p.createdDelaHash = map[string]string{}
-
-	for _, op := range coreIndex.Operations.Create {
-		uri, err := op.SuffixData.URI()
-		if err != nil {
-			return fmt.Errorf("failed to get uri from create operation: %w", err)
-		}
-
-		p.createdDelaHash[uri] = op.SuffixData.DeltaHash
-		p.deltaMappingArray = append(p.deltaMappingArray, uri)
-	}
-
-	for _, ok := range coreIndex.Operations.Recover {
-		p.deltaMappingArray = append(p.deltaMappingArray, ok.DIDSuffix)
-	}
-
-	if provisionalIndex != nil {
-		for _, op := range provisionalIndex.Operations.Update {
-			p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
-		}
-	}
-
-	return nil
-}
-
-func processKeys(id string, patch map[string]interface{}) ([]DIDKeyInfo, error) {
-
-	keys, ok := patch["publicKeys"]
-	if !ok {
-		return nil, fmt.Errorf("publicKeys not found")
-	}
-
-	var publicKeys []DIDKeyInfo
-	keyBytes, err := json.Marshal(keys)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal publicKeys: %w", err)
-	}
-
-	if err := json.Unmarshal(keyBytes, &publicKeys); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal publicKeys: %w", err)
-	}
-
-	for i, key := range publicKeys {
+	for i, key := range patch {
 		if len(base64.RawURLEncoding.EncodeToString([]byte(key.ID))) > 50 {
 			return nil, fmt.Errorf("public key id %s is too long", key.ID)
 		}
 
 		key.ID = fmt.Sprintf("#%s", key.ID)
 		key.Controller = fmt.Sprintf("did:ion:%s", id)
-		publicKeys[i] = key
+		patch[i] = key
 	}
 
-	return publicKeys, nil
+	return patch, nil
 }
 
-func processServices(patch map[string]interface{}) ([]DIDService, error) {
+func processServices(patch []DIDService) ([]DIDService, error) {
 
-	services, ok := patch["services"]
-	if !ok {
-		return nil, fmt.Errorf("services not found")
-	}
-
-	var didServices []DIDService
-	serviceBytes, err := json.Marshal(services)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal services: %w", err)
-	}
-	if err := json.Unmarshal(serviceBytes, &didServices); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal services: %w", err)
-	}
-
-	for i, service := range didServices {
+	for i, service := range patch {
 		if len(base64.URLEncoding.EncodeToString([]byte(service.ID))) > 50 {
 			return nil, fmt.Errorf("service id %s is too long", service.ID)
 		}
 
 		service.ID = fmt.Sprintf("#%s", service.ID)
-		didServices[i] = service
+		patch[i] = service
 	}
 
-	return didServices, nil
+	return patch, nil
 }

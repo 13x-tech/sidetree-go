@@ -123,8 +123,8 @@ func (c *ChunkFile) processDelta(index int, delta Delta) error {
 }
 
 type Delta struct {
-	Patches          []map[string]interface{} `json:"patches"`
-	UpdateCommitment string                   `json:"updateCommitment"`
+	Patches          []Patch `json:"patches"`
+	UpdateCommitment string  `json:"updateCommitment"`
 }
 
 func (d *Delta) Hash() (string, error) {
@@ -146,4 +146,37 @@ func (d *Delta) Hash() (string, error) {
 	}
 
 	return base64.RawURLEncoding.EncodeToString(hashed), nil
+}
+
+type Patch interface{}
+
+type AddPublicKeys struct {
+	Action     string       `json:"action"`
+	PublicKeys []DIDKeyInfo `json:"publicKeys"`
+}
+
+type AddServices struct {
+	Action   string       `json:"action"`
+	Services []DIDService `json:"services"`
+}
+
+type Remove struct {
+	Action string   `json:"action"`
+	Ids    []string `json:"ids"`
+}
+
+type Replace struct {
+	Action   string          `json:"action"`
+	Document ReplaceDocument `json:"document"`
+}
+
+type ReplaceDocument struct {
+	PublicKeys []DIDKeyInfo `json:"publicKeys,omitempty"`
+	Services   []DIDService `json:"services,omitempty"`
+}
+
+type IETFJSON struct {
+	Op    string      `json:"op"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value"`
 }
