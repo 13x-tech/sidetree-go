@@ -29,4 +29,5 @@ type Transaction interface {
 
 type TxOut interface {
 	PkScript() []byte
+	Bytes() ([]byte, error)
 }
