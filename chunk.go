@@ -1,12 +1,21 @@
 package sidetree
 
-import "fmt"
+import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+
+	"github.com/gowebpki/jcs"
+	mh "github.com/multiformats/go-multihash"
+)
 
 type ChunkFile struct {
 	Deltas            []Delta `json:"deltas"`
 	deltaMappingArray []string
 
-	processor *OperationsProcessor
+	createdDelaHash map[string]string
+	processor       *OperationsProcessor
 }
 
 func (c *ChunkFile) Process() error {
@@ -40,9 +49,18 @@ func (c *ChunkFile) Process() error {
 func (c *ChunkFile) processDelta(index int, delta Delta) error {
 	id := c.deltaMappingArray[index]
 
-	// TODO Check validation of each delta in order to proceed to patching
+	if deltaHash, ok := c.createdDelaHash[id]; ok {
 
-	if _, ok := c.processor.CoreIndexFile.createdOps[id]; !ok {
+		hashed, err := delta.Hash()
+		if err != nil {
+			return fmt.Errorf("failed to hash delta: %w", err)
+		}
+
+		if deltaHash != hashed {
+			return fmt.Errorf("delta hash does not match for created: %s", id)
+		}
+
+	} else {
 		if c.processor.ProvisionalProofFile == nil {
 			return fmt.Errorf("provisional proof file is nil")
 		}
@@ -51,12 +69,18 @@ func (c *ChunkFile) processDelta(index int, delta Delta) error {
 			return fmt.Errorf("provisional proof file verified ops is nil")
 		}
 
-		verifiedId, ok := c.processor.ProvisionalProofFile.verifiedOps[index]
+		deltaHash, ok := c.processor.ProvisionalProofFile.verifiedOps[index]
 		if !ok {
 			return fmt.Errorf("operation not found in provisional proof file")
 		}
-		if id != verifiedId {
-			return fmt.Errorf("operation id mismatch")
+
+		hashed, err := delta.Hash()
+		if err != nil {
+			return fmt.Errorf("failed to hash delta: %w", err)
+		}
+
+		if hashed != deltaHash {
+			return fmt.Errorf("delta hash does not match for operation: %s", id)
 		}
 	}
 
@@ -81,6 +105,8 @@ func (c *ChunkFile) populateDeltaMappingArray() error {
 
 	provisionalIndex := c.processor.ProvisionalIndexFile
 
+	c.createdDelaHash = make(map[string]string, len(coreIndex.Operations.Create))
+
 	for _, op := range coreIndex.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
@@ -88,6 +114,7 @@ func (c *ChunkFile) populateDeltaMappingArray() error {
 		}
 
 		c.deltaMappingArray = append(c.deltaMappingArray, uri)
+		c.createdDelaHash[uri] = op.SuffixData.DeltaHash
 	}
 
 	for _, ok := range coreIndex.Operations.Recover {
@@ -106,4 +133,25 @@ func (c *ChunkFile) populateDeltaMappingArray() error {
 type Delta struct {
 	Patches          []map[string]interface{} `json:"patches"`
 	UpdateCommitment string                   `json:"updateCommitment"`
+}
+
+func (d *Delta) Hash() (string, error) {
+	deltaBytes, err := json.Marshal(d)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal delta for hashing: %w", err)
+	}
+
+	deltaJSON, err := jcs.Transform(deltaBytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to transform delta for hashing: %w", err)
+	}
+
+	shaDelta := sha256.Sum256(deltaJSON)
+	hashed, err := mh.Encode(shaDelta[:], mh.SHA2_256)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to multihash encode sha256: %w", err)
+	}
+
+	return base64.RawURLEncoding.EncodeToString(hashed), nil
 }

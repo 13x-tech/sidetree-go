@@ -50,7 +50,12 @@ func (p *ProvisionalProofFile) processUpdate(index int, update SignedDataOp) err
 		return fmt.Errorf("failed to validate reveal value in provisional update for %s", id)
 	}
 
-	p.verifiedOps[index] = id
+	deltaHash, err := update.DeltaHash()
+	if err != nil {
+		return fmt.Errorf("failed to get delta hash for %s: %w", id, err)
+	}
+
+	p.verifiedOps[index] = deltaHash
 
 	return nil
 }

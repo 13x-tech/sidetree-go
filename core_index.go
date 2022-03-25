@@ -16,8 +16,7 @@ type CoreIndexFile struct {
 	WriterLockId        string         `json:"writerLockId,omitempty"`
 	Operations          CoreOperations `json:"operations"`
 
-	createdOps map[string]struct{}
-	processor  *OperationsProcessor
+	processor *OperationsProcessor
 }
 
 func (c *CoreIndexFile) Process() error {
@@ -92,8 +91,6 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 
 func (c *CoreIndexFile) processCreateOperations() error {
 
-	c.createdOps = make(map[string]struct{}, len(c.Operations.Create))
-
 	for _, op := range c.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
@@ -102,7 +99,6 @@ func (c *CoreIndexFile) processCreateOperations() error {
 		if err := c.processor.createDID(uri, op.SuffixData.RecoveryCommitment); err != nil {
 			return fmt.Errorf("failed to create did: %w", err)
 		}
-		c.createdOps[uri] = struct{}{}
 	}
 
 	return nil

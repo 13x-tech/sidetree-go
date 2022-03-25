@@ -11,23 +11,48 @@ import (
 
 type SignedDataOp struct {
 	SignedData string
+
+	parsed           *jose.JSONWebSignature
+	protectedPayload *ProtectedPayload
+}
+
+func (s *SignedDataOp) DeltaHash() (string, error) {
+	if s.parsed == nil || s.protectedPayload == nil {
+		if err := s.parse(); err != nil {
+			return "", fmt.Errorf("failed to parse signed data op: %w", err)
+		}
+	}
+
+	return s.protectedPayload.DeltaHash, nil
+}
+
+func (s *SignedDataOp) parse() error {
+	var err error
+	s.parsed, err = jose.ParseSigned(s.SignedData)
+	if err != nil {
+		return fmt.Errorf("failed to parse signed data: %w", err)
+	}
+
+	payload := s.parsed.UnsafePayloadWithoutVerification()
+	var protectedPayload ProtectedPayload
+
+	if err := json.Unmarshal(payload, &protectedPayload); err != nil {
+		return fmt.Errorf("failed to unmarshal protected payload: %w", err)
+	}
+
+	s.protectedPayload = &protectedPayload
+	return nil
 }
 
 func (s *SignedDataOp) ValidateReveal(revealValue string) (bool, error) {
 
-	parsed, err := jose.ParseSigned(s.SignedData)
-	if err != nil {
-		return false, fmt.Errorf("failed to parse signed data: %w", err)
+	if s.parsed == nil {
+		if err := s.parse(); err != nil {
+			return false, fmt.Errorf("failed to parse signed data: %w", err)
+		}
 	}
 
-	payload := parsed.UnsafePayloadWithoutVerification()
-
-	var protectedPayload ProtectedPayload
-	if err := json.Unmarshal(payload, &protectedPayload); err != nil {
-		return false, fmt.Errorf("failed to unmarshal protected payload: %w", err)
-	}
-
-	jsonKey, err := protectedPayload.GetKeyData()
+	jsonKey, err := s.protectedPayload.GetKeyData()
 	if err != nil {
 		return false, fmt.Errorf("failed to get key data: %w", err)
 	}
@@ -46,12 +71,14 @@ func (s *SignedDataOp) ValidateReveal(revealValue string) (bool, error) {
 		return false, fmt.Errorf("failed to unmarshal json web keys: %w", err)
 	}
 
-	verified, err := parsed.Verify(&key)
+	verified, err := s.parsed.Verify(&key)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify signature: %w", err)
 	}
 
-	return bytes.Equal(payload, verified), nil
+	unsafePayload := s.parsed.UnsafePayloadWithoutVerification()
+
+	return bytes.Equal(unsafePayload, verified), nil
 }
 
 type ProtectedPayload struct {
