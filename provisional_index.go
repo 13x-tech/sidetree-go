@@ -47,12 +47,18 @@ func (p *ProvisionalIndexFile) processRevealValues() error {
 		return nil
 	}
 
-	p.revealValues = make(map[string]string, len(p.Operations.Update))
+	p.revealValues = map[string]string{}
 
 	for _, op := range p.Operations.Update {
 		updateCommitment, err := p.processor.getUpdateCommitment(op.DIDSuffix)
 		if err != nil {
-			p.processor.log.Errorf("core index: %s - failed to get update commitment for %s: %w", p.processor.CoreIndexFileURI, op.DIDSuffix, err)
+			p.processor.log.Errorf(
+				"core index: %s - failed to get update commitment for %s: %w",
+				p.processor.CoreIndexFileURI,
+				op.DIDSuffix,
+				err,
+			)
+			continue
 		}
 		if checkReveal(op.RevealValue, updateCommitment) {
 			p.revealValues[op.DIDSuffix] = op.RevealValue
@@ -63,16 +69,15 @@ func (p *ProvisionalIndexFile) processRevealValues() error {
 
 func (p *ProvisionalIndexFile) populateCoreOperationArray() error {
 
-	suffixMap := make(map[string]struct{})
-
 	for _, op := range p.Operations.Update {
-		if _, ok := suffixMap[op.DIDSuffix]; ok {
+		if _, ok := p.processor.CoreIndexFile.suffixMap[op.DIDSuffix]; ok {
 			return fmt.Errorf("duplicate operation found in recover")
 		}
-		p.processor.operationStorage = append(p.processor.operationStorage, op.DIDSuffix)
+
+		p.processor.CoreIndexFile.suffixMap[op.DIDSuffix] = struct{}{}
 	}
 
-	if len(suffixMap) > 0 && p.ProvisionalProofURI == "" {
+	if len(p.Operations.Update) > 0 && p.ProvisionalProofURI == "" {
 		return fmt.Errorf("provisional proof uri is empty")
 	}
 

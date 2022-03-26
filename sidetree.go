@@ -166,14 +166,24 @@ func (d *SideTreeIndexer) checkSignature(b []byte) bool {
 }
 
 func (d *SideTreeIndexer) Process() error {
+
+	totalProcessed := 0
+
 	for i := d.config.StartBlock; i <= d.bestBlock; i++ {
 		if i%100 == 0 {
-			d.log.Infof("Processing operations for block %d...\n", i)
+			d.log.Infof("Processing operations for block %d - %d ops processed so far...\n", i, totalProcessed)
 		}
+
 		ops, err := d.indexStore.GetBlockOps(i)
 		if err != nil {
 			return fmt.Errorf("failed to get block ops for height %d: %w", i, err)
 		}
+
+		totalOps := 0
+		for _, op := range ops {
+			totalOps = totalOps + op.Ops
+		}
+		totalProcessed = totalProcessed + totalOps
 
 		if err := d.processSideTreeOperations(ops); err != nil {
 			d.log.Error(err)
@@ -185,7 +195,7 @@ func (d *SideTreeIndexer) Process() error {
 
 func (d *SideTreeIndexer) processSideTreeOperations(ops []SideTreeOp) error {
 	for _, op := range ops {
-		processor, err := NewOperationsProcessor(op.Ops, op.CID, d.log, d.config.Storage)
+		processor, err := Processor(op.Ops, op.CID, d.log, d.config.Storage)
 		if err != nil {
 			return fmt.Errorf("failed to create operations processor: %w", err)
 		}

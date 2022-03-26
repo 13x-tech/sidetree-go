@@ -15,7 +15,7 @@ func NewDIDDoc(id string, recoveryCommitment string) *DIDDoc {
 	var didContext []interface{}
 	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
 
-	contextBase := make(map[string]interface{})
+	contextBase := map[string]interface{}{}
 	contextBase["@base"] = fmt.Sprintf("did:ion:%s", id)
 	didContext = append(didContext, contextBase)
 

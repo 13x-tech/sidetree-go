@@ -16,8 +16,8 @@ type CoreIndexFile struct {
 	WriterLockId        string         `json:"writerLockId,omitempty"`
 	Operations          CoreOperations `json:"operations"`
 
-	createdOps map[string]struct{}
-	processor  *OperationsProcessor
+	suffixMap map[string]struct{}
+	processor *OperationsProcessor
 }
 
 func (c *CoreIndexFile) Process() error {
@@ -56,7 +56,8 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 	// - if any duplicates are found, cease processing, discard the file data,
 	// and retain a reference that the whole batch of anchored operations and all
 	// its files are to be ignored.
-	suffixMap := make(map[string]struct{})
+
+	c.suffixMap = map[string]struct{}{}
 
 	for _, op := range c.Operations.Create {
 		uri, err := op.SuffixData.URI()
@@ -64,35 +65,31 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 			return fmt.Errorf("failed to get uri: %w", err)
 		}
 
-		if _, ok := suffixMap[uri]; ok {
+		if _, ok := c.suffixMap[uri]; ok {
 			return fmt.Errorf("duplicate operation found in create")
 		}
 
-		c.processor.operationStorage = append(c.processor.operationStorage, uri)
+		c.suffixMap[uri] = struct{}{}
 	}
 
 	for _, op := range c.Operations.Recover {
-		if _, ok := suffixMap[op.DIDSuffix]; ok {
+		if _, ok := c.suffixMap[op.DIDSuffix]; ok {
 			return fmt.Errorf("duplicate operation found in recover")
 		}
-
-		c.processor.operationStorage = append(c.processor.operationStorage, op.DIDSuffix)
+		c.suffixMap[op.DIDSuffix] = struct{}{}
 	}
 
 	for _, op := range c.Operations.Deactivate {
-		if _, ok := suffixMap[op.DIDSuffix]; ok {
+		if _, ok := c.suffixMap[op.DIDSuffix]; ok {
 			return fmt.Errorf("duplicate operation found in deactivate")
 		}
-
-		c.processor.operationStorage = append(c.processor.operationStorage, op.DIDSuffix)
+		c.suffixMap[op.DIDSuffix] = struct{}{}
 	}
 
 	return nil
 }
 
 func (c *CoreIndexFile) processCreateOperations() error {
-
-	c.createdOps = make(map[string]struct{}, len(c.Operations.Create))
 
 	for _, op := range c.Operations.Create {
 		uri, err := op.SuffixData.URI()
@@ -102,7 +99,6 @@ func (c *CoreIndexFile) processCreateOperations() error {
 		if err := c.processor.createDID(uri, op.SuffixData.RecoveryCommitment); err != nil {
 			return fmt.Errorf("failed to create did: %w", err)
 		}
-		c.createdOps[uri] = struct{}{}
 	}
 
 	return nil

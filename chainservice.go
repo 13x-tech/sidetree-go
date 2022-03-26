@@ -12,7 +12,6 @@ type Service interface {
 type Block interface {
 	Height() int64
 	Hash() Hash
-	MerkleRoot() Hash
 	Transactions() []Transaction
 }
 
