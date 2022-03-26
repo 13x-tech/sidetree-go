@@ -8,7 +8,7 @@ type ProvisionalProofFile struct {
 	Operations PorvProofOperations `json:"operations"`
 
 	deltaMappingArray []string
-	verifiedOps       map[int]string
+	verifiedOps       map[string]string
 	processor         *OperationsProcessor
 }
 
@@ -22,7 +22,7 @@ func (p *ProvisionalProofFile) Process() error {
 			return fmt.Errorf("failed to populate delta mapping array: %w", err)
 		}
 
-		p.verifiedOps = make(map[int]string, len(p.Operations.Update))
+		p.verifiedOps = make(map[string]string, len(p.Operations.Update))
 		for i, op := range p.Operations.Update {
 			if err := p.processUpdate(i, op); err != nil {
 				p.processor.log.Errorf("Failed to process provisional proof operation %d: %w", i, err)
@@ -36,7 +36,7 @@ func (p *ProvisionalProofFile) Process() error {
 	return nil
 }
 
-func (p *ProvisionalProofFile) processUpdate(index int, update SignedDataOp) error {
+func (p *ProvisionalProofFile) processUpdate(index int, update SignedUpdateDataOp) error {
 	id := p.deltaMappingArray[index]
 
 	revealValue, ok := p.processor.ProvisionalIndexFile.revealValues[id]
@@ -55,7 +55,7 @@ func (p *ProvisionalProofFile) processUpdate(index int, update SignedDataOp) err
 		return fmt.Errorf("failed to get delta hash for %s: %w", id, err)
 	}
 
-	p.verifiedOps[index] = deltaHash
+	p.verifiedOps[id] = deltaHash
 
 	return nil
 }
@@ -91,5 +91,5 @@ func (p *ProvisionalProofFile) populateDeltaMappingArray() error {
 }
 
 type PorvProofOperations struct {
-	Update []SignedDataOp `json:"update"`
+	Update []SignedUpdateDataOp `json:"update"`
 }

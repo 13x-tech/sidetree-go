@@ -171,7 +171,7 @@ func (d *SideTreeIndexer) Process() error {
 
 	for i := d.config.StartBlock; i <= d.bestBlock; i++ {
 		if i%100 == 0 {
-			d.log.Infof("Processing operations for block %d - %d ops processed so far...\n", totalProcessed, i)
+			d.log.Infof("Processing operations for block %d - %d ops processed so far...\n", i, totalProcessed)
 		}
 
 		ops, err := d.indexStore.GetBlockOps(i)

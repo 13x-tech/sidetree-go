@@ -15,7 +15,8 @@ type ChunkFile struct {
 	deltaMappingArray []string
 
 	createdDelaHash map[string]string
-	processor       *OperationsProcessor
+
+	processor *OperationsProcessor
 }
 
 func (c *ChunkFile) Process() error {
@@ -46,10 +47,41 @@ func (c *ChunkFile) Process() error {
 	return nil
 }
 
+func (c *ChunkFile) createdDeltaHash(id string) (string, bool) {
+	if c.createdDelaHash == nil {
+		return "", false
+	}
+
+	deltaHash, ok := c.createdDelaHash[id]
+	return deltaHash, ok
+}
+
+func (c *ChunkFile) recoveryDeltaHash(id string) (string, bool) {
+	if c.processor.CoreProofFile == nil || c.processor.CoreProofFile.recoveryDeltaHash == nil {
+		return "", false
+	}
+
+	deltaHash, ok := c.processor.CoreProofFile.recoveryDeltaHash[id]
+	return deltaHash, ok
+}
+
+func (c *ChunkFile) updateDeltaHash(id string) (string, bool) {
+	if c.processor.ProvisionalProofFile == nil {
+		return "", false
+	}
+
+	if c.processor.ProvisionalProofFile.verifiedOps == nil {
+		return "", false
+	}
+
+	deltaHash, ok := c.processor.ProvisionalProofFile.verifiedOps[id]
+	return deltaHash, ok
+}
+
 func (c *ChunkFile) processDelta(index int, delta Delta) error {
 	id := c.deltaMappingArray[index]
 
-	if deltaHash, ok := c.createdDelaHash[id]; ok {
+	if deltaHash, ok := c.createdDeltaHash(id); ok {
 
 		hashed, err := delta.Hash()
 		if err != nil {
@@ -60,19 +92,18 @@ func (c *ChunkFile) processDelta(index int, delta Delta) error {
 			return fmt.Errorf("delta hash does not match for created: %s", id)
 		}
 
-	} else {
-		if c.processor.ProvisionalProofFile == nil {
-			return fmt.Errorf("provisional proof file is nil")
+	} else if deltaHash, ok = c.recoveryDeltaHash(id); ok {
+
+		hashed, err := delta.Hash()
+		if err != nil {
+			return fmt.Errorf("failed to hash delta: %w", err)
 		}
 
-		if c.processor.ProvisionalProofFile.verifiedOps == nil {
-			return fmt.Errorf("provisional proof file verified ops is nil")
+		if deltaHash != hashed {
+			return fmt.Errorf("delta hash does not match for recovery: %s", id)
 		}
 
-		deltaHash, ok := c.processor.ProvisionalProofFile.verifiedOps[index]
-		if !ok {
-			return fmt.Errorf("operation not found in provisional proof file")
-		}
+	} else if deltaHash, ok = c.updateDeltaHash(id); ok {
 
 		hashed, err := delta.Hash()
 		if err != nil {
@@ -117,8 +148,8 @@ func (c *ChunkFile) populateDeltaMappingArray() error {
 		c.createdDelaHash[uri] = op.SuffixData.DeltaHash
 	}
 
-	for _, ok := range coreIndex.Operations.Recover {
-		c.deltaMappingArray = append(c.deltaMappingArray, ok.DIDSuffix)
+	for _, op := range coreIndex.Operations.Recover {
+		c.deltaMappingArray = append(c.deltaMappingArray, op.DIDSuffix)
 	}
 
 	if provisionalIndex != nil {

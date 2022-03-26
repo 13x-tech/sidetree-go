@@ -49,8 +49,7 @@ type OperationsProcessor struct {
 	didStore DIDs
 	casStore CAS
 
-	opsCount         int
-	operationStorage []string
+	opsCount int
 }
 
 func (d *OperationsProcessor) Process() error {

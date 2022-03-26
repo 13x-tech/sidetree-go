@@ -17,7 +17,8 @@ type Storage interface {
 type DIDs interface {
 	io.Closer
 	Put(doc *DIDDoc) error
-	Delete(id string) error //Temporary Just For Testing/Syncing
+	Deactivate(id string) error
+	Recover(id string) error
 	Get(id string) (*DIDDoc, error)
 	List() ([]string, error)
 }

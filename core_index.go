@@ -16,6 +16,7 @@ type CoreIndexFile struct {
 	WriterLockId        string         `json:"writerLockId,omitempty"`
 	Operations          CoreOperations `json:"operations"`
 
+	suffixMap map[string]struct{}
 	processor *OperationsProcessor
 }
 
@@ -55,7 +56,7 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 	// - if any duplicates are found, cease processing, discard the file data,
 	// and retain a reference that the whole batch of anchored operations and all
 	// its files are to be ignored.
-	suffixMap := make(map[string]struct{})
+	c.suffixMap = make(map[string]struct{})
 
 	for _, op := range c.Operations.Create {
 		uri, err := op.SuffixData.URI()
@@ -63,27 +64,21 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 			return fmt.Errorf("failed to get uri: %w", err)
 		}
 
-		if _, ok := suffixMap[uri]; ok {
+		if _, ok := c.suffixMap[uri]; ok {
 			return fmt.Errorf("duplicate operation found in create")
 		}
-
-		c.processor.operationStorage = append(c.processor.operationStorage, uri)
 	}
 
 	for _, op := range c.Operations.Recover {
-		if _, ok := suffixMap[op.DIDSuffix]; ok {
+		if _, ok := c.suffixMap[op.DIDSuffix]; ok {
 			return fmt.Errorf("duplicate operation found in recover")
 		}
-
-		c.processor.operationStorage = append(c.processor.operationStorage, op.DIDSuffix)
 	}
 
 	for _, op := range c.Operations.Deactivate {
-		if _, ok := suffixMap[op.DIDSuffix]; ok {
+		if _, ok := c.suffixMap[op.DIDSuffix]; ok {
 			return fmt.Errorf("duplicate operation found in deactivate")
 		}
-
-		c.processor.operationStorage = append(c.processor.operationStorage, op.DIDSuffix)
 	}
 
 	return nil
