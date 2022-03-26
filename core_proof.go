@@ -18,19 +18,29 @@ func (p *CoreProofFile) Process() error {
 		return fmt.Errorf("core proof and core index file do not match")
 	}
 
-	p.recoveryDeltaHash = make(map[string]string, len(p.Operations.Recover))
+	p.recoveryDeltaHash = map[string]string{}
 
 	for i, op := range p.Operations.Recover {
 		coreOp := p.processor.CoreIndexFile.Operations.Recover[i]
 		if err := p.processRecover(coreOp.DIDSuffix, coreOp.RevealValue, op); err != nil {
-			p.processor.log.Errorf("core index: %s - failed to process core proof recovery operation for %s: %w", p.processor.CoreIndexFileURI, coreOp.DIDSuffix, err)
+			p.processor.log.Errorf(
+				"core index: %s - failed to process core proof recovery operation for %s: %w",
+				p.processor.CoreIndexFileURI,
+				coreOp.DIDSuffix,
+				err,
+			)
 		}
 	}
 
 	for i, op := range p.Operations.Deactivate {
 		coreOp := p.processor.CoreIndexFile.Operations.Deactivate[i]
 		if err := p.processDeactivate(coreOp.DIDSuffix, coreOp.RevealValue, op); err != nil {
-			p.processor.log.Errorf("core index: %s - failed to process core proof deactivate operation for %s: %w", p.processor.CoreIndexFileURI, coreOp.DIDSuffix, err)
+			p.processor.log.Errorf(
+				"core index: %s - failed to process core proof deactivate operation for %s: %w",
+				p.processor.CoreIndexFileURI,
+				coreOp.DIDSuffix,
+				err,
+			)
 		}
 	}
 

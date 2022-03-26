@@ -47,12 +47,17 @@ func (p *ProvisionalIndexFile) processRevealValues() error {
 		return nil
 	}
 
-	p.revealValues = make(map[string]string, len(p.Operations.Update))
+	p.revealValues = map[string]string{}
 
 	for _, op := range p.Operations.Update {
 		updateCommitment, err := p.processor.getUpdateCommitment(op.DIDSuffix)
 		if err != nil {
-			p.processor.log.Errorf("core index: %s - failed to get update commitment for %s: %w", p.processor.CoreIndexFileURI, op.DIDSuffix, err)
+			p.processor.log.Errorf(
+				"core index: %s - failed to get update commitment for %s: %w",
+				p.processor.CoreIndexFileURI,
+				op.DIDSuffix,
+				err,
+			)
 			continue
 		}
 		if checkReveal(op.RevealValue, updateCommitment) {
@@ -68,6 +73,8 @@ func (p *ProvisionalIndexFile) populateCoreOperationArray() error {
 		if _, ok := p.processor.CoreIndexFile.suffixMap[op.DIDSuffix]; ok {
 			return fmt.Errorf("duplicate operation found in recover")
 		}
+
+		p.processor.CoreIndexFile.suffixMap[op.DIDSuffix] = struct{}{}
 	}
 
 	if len(p.Operations.Update) > 0 && p.ProvisionalProofURI == "" {

@@ -11,10 +11,7 @@ import (
 )
 
 type ChunkFile struct {
-	Deltas            []Delta `json:"deltas"`
-	deltaMappingArray []string
-
-	createdDelaHash map[string]string
+	Deltas []Delta `json:"deltas"`
 
 	processor *OperationsProcessor
 }
@@ -30,11 +27,8 @@ func (c *ChunkFile) Process() error {
 	// Core Index File Create Entries, Core Index File Recovery Entries,
 	// Provisional Index File Update Entries into a single array, in that order,
 	// herein referred to as the Operation Delta Mapping Array
-	if err := c.populateDeltaMappingArray(); err != nil {
-		return fmt.Errorf("failed to populate operation mapping array: %w", err)
-	}
 
-	if len(c.deltaMappingArray) > len(c.Deltas) {
+	if len(c.processor.deltaMappingArray) > len(c.Deltas) {
 		return fmt.Errorf("operation mapping array contains more entries than delta entries")
 	}
 
@@ -48,11 +42,11 @@ func (c *ChunkFile) Process() error {
 }
 
 func (c *ChunkFile) createdDeltaHash(id string) (string, bool) {
-	if c.createdDelaHash == nil {
+	if c.processor.createdDelaHash == nil {
 		return "", false
 	}
 
-	deltaHash, ok := c.createdDelaHash[id]
+	deltaHash, ok := c.processor.createdDelaHash[id]
 	return deltaHash, ok
 }
 
@@ -79,7 +73,7 @@ func (c *ChunkFile) updateDeltaHash(id string) (string, bool) {
 }
 
 func (c *ChunkFile) processDelta(index int, delta Delta) error {
-	id := c.deltaMappingArray[index]
+	id := c.processor.deltaMappingArray[index]
 
 	if deltaHash, ok := c.createdDeltaHash(id); ok {
 
@@ -122,39 +116,6 @@ func (c *ChunkFile) processDelta(index int, delta Delta) error {
 	for _, patch := range delta.Patches {
 		if err := c.processor.patchDelta(id, patch); err != nil {
 			c.processor.log.Errorf("core index: %s - failed to patch delta: %w", c.processor.CoreIndexFileURI, err)
-		}
-	}
-
-	return nil
-}
-
-func (c *ChunkFile) populateDeltaMappingArray() error {
-	coreIndex := c.processor.CoreIndexFile
-	if coreIndex == nil {
-		return fmt.Errorf("core index file is nil")
-	}
-
-	provisionalIndex := c.processor.ProvisionalIndexFile
-
-	c.createdDelaHash = make(map[string]string, len(coreIndex.Operations.Create))
-
-	for _, op := range coreIndex.Operations.Create {
-		uri, err := op.SuffixData.URI()
-		if err != nil {
-			return fmt.Errorf("failed to get uri from create operation: %w", err)
-		}
-
-		c.deltaMappingArray = append(c.deltaMappingArray, uri)
-		c.createdDelaHash[uri] = op.SuffixData.DeltaHash
-	}
-
-	for _, op := range coreIndex.Operations.Recover {
-		c.deltaMappingArray = append(c.deltaMappingArray, op.DIDSuffix)
-	}
-
-	if provisionalIndex != nil {
-		for _, op := range provisionalIndex.Operations.Update {
-			c.deltaMappingArray = append(c.deltaMappingArray, op.DIDSuffix)
 		}
 	}
 

@@ -195,7 +195,7 @@ func (d *SideTreeIndexer) Process() error {
 
 func (d *SideTreeIndexer) processSideTreeOperations(ops []SideTreeOp) error {
 	for _, op := range ops {
-		processor, err := NewOperationsProcessor(op.Ops, op.CID, d.log, d.config.Storage)
+		processor, err := Processor(op.Ops, op.CID, d.log, d.config.Storage)
 		if err != nil {
 			return fmt.Errorf("failed to create operations processor: %w", err)
 		}

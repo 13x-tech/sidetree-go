@@ -2,7 +2,8 @@ module github.com/13x-tech/sidetree-go
 
 go 1.17
 
-//Replace Go-Jose to include secp256k1 curve from btcd/bcecc package
+// Replace Go-Jose to include secp256k1 curve from btcd/bcecc package
+// TODO: Maybe replace this with an interface and/or jwx package
 replace github.com/go-jose/go-jose/v3 v3.0.0 => github.com/13x-tech/go-jose/v3 v3.0.1-0.20220321223504-5b54fdf1b7df
 
 require (

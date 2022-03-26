@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-func NewOperationsProcessor(operations int, indexURI string, logger Logger, storage Storage) (*OperationsProcessor, error) {
+func Processor(operations int, indexURI string, logger Logger, storage Storage) (*OperationsProcessor, error) {
 
 	didStore, err := storage.DIDs()
 	if err != nil {
@@ -49,7 +49,9 @@ type OperationsProcessor struct {
 	didStore DIDs
 	casStore CAS
 
-	opsCount int
+	opsCount          int
+	deltaMappingArray []string
+	createdDelaHash   map[string]string
 }
 
 func (d *OperationsProcessor) Process() error {
@@ -445,6 +447,42 @@ func (d *OperationsProcessor) getUpdateCommitment(id string) (string, error) {
 	}
 
 	return didDoc.Metadata.Method.UpdateCommitment, nil
+}
+
+func (p *OperationsProcessor) populateDeltaMappingArray() error {
+	coreIndex := p.CoreIndexFile
+	if coreIndex == nil {
+		return fmt.Errorf("core index file is nil")
+	}
+
+	provisionalIndex := p.ProvisionalIndexFile
+	if provisionalIndex == nil {
+		return fmt.Errorf("provisional index file is nil")
+	}
+
+	p.createdDelaHash = map[string]string{}
+
+	for _, op := range coreIndex.Operations.Create {
+		uri, err := op.SuffixData.URI()
+		if err != nil {
+			return fmt.Errorf("failed to get uri from create operation: %w", err)
+		}
+
+		p.createdDelaHash[uri] = op.SuffixData.DeltaHash
+		p.deltaMappingArray = append(p.deltaMappingArray, uri)
+	}
+
+	for _, ok := range coreIndex.Operations.Recover {
+		p.deltaMappingArray = append(p.deltaMappingArray, ok.DIDSuffix)
+	}
+
+	if provisionalIndex != nil {
+		for _, op := range provisionalIndex.Operations.Update {
+			p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
+		}
+	}
+
+	return nil
 }
 
 func processKeys(id string, patch map[string]interface{}) ([]DIDKeyInfo, error) {

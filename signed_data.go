@@ -73,7 +73,7 @@ func (s *SignedUpdateDataOp) ValidateReveal(revealValue string) (bool, error) {
 
 	verified, err := s.parsed.Verify(&key)
 	if err != nil {
-		return false, fmt.Errorf("failed to verify signature: %w", err)
+		return false, fmt.Errorf("failed to verify signature for key %s: %w", jsonKey, err)
 	}
 
 	unsafePayload := s.parsed.UnsafePayloadWithoutVerification()
@@ -165,7 +165,7 @@ func (s *SignedRecoverDataOp) ValidateReveal(revealValue string) (bool, error) {
 
 	verified, err := s.parsed.Verify(&key)
 	if err != nil {
-		return false, fmt.Errorf("failed to verify signature: %w", err)
+		return false, fmt.Errorf("failed to verify signature for key %s: %w", jsonKey, err)
 	}
 
 	unsafePayload := s.parsed.UnsafePayloadWithoutVerification()
@@ -249,7 +249,7 @@ func (s *SignedDeactivateDataOp) ValidateReveal(revealValue string) (bool, error
 
 	verified, err := s.parsed.Verify(&key)
 	if err != nil {
-		return false, fmt.Errorf("failed to verify signature: %w", err)
+		return false, fmt.Errorf("failed to verify signature for key %s: %w", jsonKey, err)
 	}
 
 	unsafePayload := s.parsed.UnsafePayloadWithoutVerification()

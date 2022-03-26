@@ -56,7 +56,8 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 	// - if any duplicates are found, cease processing, discard the file data,
 	// and retain a reference that the whole batch of anchored operations and all
 	// its files are to be ignored.
-	c.suffixMap = make(map[string]struct{})
+
+	c.suffixMap = map[string]struct{}{}
 
 	for _, op := range c.Operations.Create {
 		uri, err := op.SuffixData.URI()
@@ -67,18 +68,22 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 		if _, ok := c.suffixMap[uri]; ok {
 			return fmt.Errorf("duplicate operation found in create")
 		}
+
+		c.suffixMap[uri] = struct{}{}
 	}
 
 	for _, op := range c.Operations.Recover {
 		if _, ok := c.suffixMap[op.DIDSuffix]; ok {
 			return fmt.Errorf("duplicate operation found in recover")
 		}
+		c.suffixMap[op.DIDSuffix] = struct{}{}
 	}
 
 	for _, op := range c.Operations.Deactivate {
 		if _, ok := c.suffixMap[op.DIDSuffix]; ok {
 			return fmt.Errorf("duplicate operation found in deactivate")
 		}
+		c.suffixMap[op.DIDSuffix] = struct{}{}
 	}
 
 	return nil
