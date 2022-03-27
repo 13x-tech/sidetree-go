@@ -18,6 +18,10 @@ func (p *ProvisionalIndexFile) Process() error {
 
 	p.processor.ProvisionalProofFileURI = p.ProvisionalProofURI
 
+	if err := p.processor.populateDeltaMappingArray(); err != nil {
+		return fmt.Errorf("failed to populate delta mapping array: %w", err)
+	}
+
 	if err := p.populateCoreOperationArray(); err != nil {
 		return fmt.Errorf("failed to populate core operation storage array: %w", err)
 	}

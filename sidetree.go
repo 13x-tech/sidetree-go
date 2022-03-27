@@ -4,8 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -85,7 +83,7 @@ func (d *SideTreeIndexer) Index() error {
 
 	count := 0
 	for i := d.config.StartBlock; i <= bb.Height(); i++ {
-		_, err := d.indexStore.GetBlockOps(i)
+		_, err := d.indexStore.GetOps(int(i))
 		if err != nil {
 			count++
 			d.blockGuard <- struct{}{}
@@ -124,23 +122,23 @@ func (d *SideTreeIndexer) processBlock(blockheigt int64) error {
 	for i, tx := range block.Transactions() {
 		for n, txout := range tx.TxOut() {
 			if d.checkSignature(txout.PkScript()) {
-				opCount, CID := d.parseTxOut(txout.PkScript())
-				if opCount != 0 && CID != "" {
-					ops = append(ops, SideTreeOp{
-						BlockHash:    block.Hash().String(),
-						Height:       blockheigt,
-						BlockTxIndex: i,
-						TxOutpoint:   fmt.Sprintf("%s:%d", tx.Hash().String(), n),
-						Ops:          opCount,
-						CID:          CID,
-						Processed:    false,
-					})
+				anchorString := d.parseTxOut(txout.PkScript())
+				if anchorString != "" {
+					op := NewSideTreeOp(
+						anchorString,
+						int(block.Height()),
+						block.Hash().String(),
+						i,
+						tx.Hash().String(),
+						n,
+					)
+					ops = append(ops, op)
 				}
 			}
 		}
 	}
 
-	if err := d.indexStore.PutBlockOps(blockheigt, ops); err != nil {
+	if err := d.indexStore.PutOps(int(blockheigt), ops); err != nil {
 		return err
 	}
 
@@ -162,7 +160,7 @@ func (d *SideTreeIndexer) checkSignature(b []byte) bool {
 		return false
 	}
 
-	return string(b[2:6]) == d.config.Prefix
+	return string(b[2:2+len(d.config.Prefix)]) == d.config.Prefix
 }
 
 func (d *SideTreeIndexer) Process() error {
@@ -174,14 +172,14 @@ func (d *SideTreeIndexer) Process() error {
 			d.log.Infof("Processing operations for block %d - %d ops processed so far...\n", i, totalProcessed)
 		}
 
-		ops, err := d.indexStore.GetBlockOps(i)
+		ops, err := d.indexStore.GetOps(int(i))
 		if err != nil {
 			return fmt.Errorf("failed to get block ops for height %d: %w", i, err)
 		}
 
 		totalOps := 0
 		for _, op := range ops {
-			totalOps = totalOps + op.Ops
+			totalOps = totalOps + op.Operations()
 		}
 		totalProcessed = totalProcessed + totalOps
 
@@ -195,7 +193,7 @@ func (d *SideTreeIndexer) Process() error {
 
 func (d *SideTreeIndexer) processSideTreeOperations(ops []SideTreeOp) error {
 	for _, op := range ops {
-		processor, err := Processor(op.Ops, op.CID, d.log, d.config.Storage)
+		processor, err := Processor(op, op.CID(), d.log, d.config.Storage)
 		if err != nil {
 			return fmt.Errorf("failed to create operations processor: %w", err)
 		}
@@ -207,23 +205,19 @@ func (d *SideTreeIndexer) processSideTreeOperations(ops []SideTreeOp) error {
 	return nil
 }
 
-func (d *SideTreeIndexer) parseTxOut(b []byte) (operations int, address string) {
+// This is particular to ION and is not a general purpose function
+// TODO: make this a general purpose function
+func (d *SideTreeIndexer) parseTxOut(b []byte) string {
 	if !d.checkSignature(b) {
-		return 0, ""
+		return ""
 	}
 
-	//TODO Clean this up. It's a bit of a hack.
-	//Measure start + end bytes using options for did method
 	pushBytes := int(b[1])
-	parts := strings.Split(string(b[6:2+pushBytes]), ".")
-	if len(parts) != 2 {
-		return 0, ""
-	}
-	operations, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, ""
-	}
-	return operations, parts[1]
+
+	startIndex := 2 + len(d.config.Prefix)
+	endIndex := 2 + pushBytes
+
+	return string(b[startIndex:endIndex])
 }
 
 func checkReveal(reveal string, commitment string) bool {

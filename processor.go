@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-func Processor(operations int, indexURI string, logger Logger, storage Storage) (*OperationsProcessor, error) {
+func Processor(op SideTreeOp, indexURI string, logger Logger, storage Storage) (*OperationsProcessor, error) {
 
 	didStore, err := storage.DIDs()
 	if err != nil {
@@ -18,16 +18,20 @@ func Processor(operations int, indexURI string, logger Logger, storage Storage) 
 		return nil, fmt.Errorf("failed to get cas store: %w", err)
 	}
 
+	indexStore, err := storage.Indexer()
+
 	return &OperationsProcessor{
+		op:               op,
 		log:              logger,
-		opsCount:         operations,
 		CoreIndexFileURI: indexURI,
 		didStore:         didStore,
 		casStore:         casStore,
+		indexStore:       indexStore,
 	}, nil
 }
 
 type OperationsProcessor struct {
+	op  SideTreeOp
 	log Logger
 
 	CoreIndexFileURI string
@@ -46,10 +50,10 @@ type OperationsProcessor struct {
 	ChunkFileURI string
 	ChunkFile    *ChunkFile
 
-	didStore DIDs
-	casStore CAS
+	didStore   DIDs
+	casStore   CAS
+	indexStore Indexer
 
-	opsCount          int
 	deltaMappingArray []string
 	createdDelaHash   map[string]string
 }
@@ -461,24 +465,51 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 	}
 
 	p.createdDelaHash = map[string]string{}
-
 	for _, op := range coreIndex.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
 			return fmt.Errorf("failed to get uri from create operation: %w", err)
 		}
 
+		if err := p.updateDIDOperations(uri); err != nil {
+			return fmt.Errorf("failed to update did operations: %w", err)
+		}
+
 		p.createdDelaHash[uri] = op.SuffixData.DeltaHash
 		p.deltaMappingArray = append(p.deltaMappingArray, uri)
 	}
 
-	for _, ok := range coreIndex.Operations.Recover {
-		p.deltaMappingArray = append(p.deltaMappingArray, ok.DIDSuffix)
+	for _, op := range coreIndex.Operations.Recover {
+		if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
+			return fmt.Errorf("failed to update did operations: %w", err)
+		}
+
+		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
 	}
 
-	if provisionalIndex != nil {
-		for _, op := range provisionalIndex.Operations.Update {
-			p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
+	for _, op := range provisionalIndex.Operations.Update {
+		if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
+			return fmt.Errorf("failed to update did operations: %w", err)
+		}
+		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
+	}
+
+	return nil
+}
+
+func (p *OperationsProcessor) updateDIDOperations(id string) error {
+
+	var err error
+	var ops []SideTreeOp
+	ops, err = p.indexStore.GetDIDOps(id)
+	if err != nil {
+		return fmt.Errorf("failed to get did operations: %w", err)
+	}
+
+	if !OpAlreadyExists(ops, p.op) {
+		ops = append(ops, p.op)
+		if err := p.indexStore.PutDIDOps(id, ops); err != nil {
+			return fmt.Errorf("failed to put did operations: %w", err)
 		}
 	}
 
