@@ -33,6 +33,7 @@ type SideTreeIndexer struct {
 
 	wg         sync.WaitGroup
 	blockGuard chan struct{}
+	errChan    chan error
 }
 
 func New(config Config) SideTree {
@@ -65,6 +66,12 @@ func (d *SideTreeIndexer) Index() error {
 	d.log.Info("Will print status every 100 blocks")
 
 	startTime := time.Now()
+	d.errChan = make(chan error)
+
+	go func() {
+		err := <-d.errChan
+		panic(err)
+	}()
 
 	if !d.srv.IsCurrent() {
 		if err := d.srv.WaitForSync(); err != nil {
@@ -111,12 +118,12 @@ func (d *SideTreeIndexer) processBlock(blockheigt int64) error {
 
 	hash, err := d.srv.GetBlockHash(blockheigt)
 	if err != nil {
-		return err
+		d.errChan <- err
 	}
 
 	block, err := d.srv.GetBlock(hash)
 	if err != nil {
-		return err
+		d.errChan <- err
 	}
 
 	for i, tx := range block.Transactions() {
@@ -139,7 +146,7 @@ func (d *SideTreeIndexer) processBlock(blockheigt int64) error {
 	}
 
 	if err := d.indexStore.PutOps(int(blockheigt), ops); err != nil {
-		return err
+		d.errChan <- err
 	}
 
 	return nil
