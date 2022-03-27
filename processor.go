@@ -19,6 +19,9 @@ func Processor(op SideTreeOp, indexURI string, logger Logger, storage Storage) (
 	}
 
 	indexStore, err := storage.Indexer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get index store: %w", err)
+	}
 
 	return &OperationsProcessor{
 		op:               op,
