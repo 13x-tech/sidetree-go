@@ -5,7 +5,7 @@ type Service interface {
 	WaitForSync() error
 	IsCurrent() bool
 	BestBlock() (Block, error)
-	GetBlockHash(block int64) (Hash, error)
+	GetBlockHash(block int) (Hash, error)
 	GetBlock(hash Hash) (Block, error)
 }
 

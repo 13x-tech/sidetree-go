@@ -250,7 +250,7 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 
 func (d *OperationsProcessor) createDID(id string, recoverCommitment string) error {
 
-	didDoc := NewDIDDoc(id, recoverCommitment)
+	didDoc := d.NewDIDDoc(id, recoverCommitment)
 	if err := d.didStore.Put(didDoc); err != nil {
 		return fmt.Errorf("failed to put did document: %w", err)
 	}
@@ -578,4 +578,30 @@ func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]D
 	}
 
 	return didServices, nil
+}
+
+func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *DIDDoc {
+
+	var didContext []interface{}
+	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
+
+	contextBase := map[string]interface{}{}
+	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.config.Prefix, id)
+	didContext = append(didContext, contextBase)
+
+	return &DIDDoc{
+		Context: "https://w3id.org/did-resolution/v1",
+		DIDDocument: &DIDDocData{
+			ID:      id,
+			DocID:   fmt.Sprintf("did:%s:%s", d.config.Prefix, id),
+			Context: didContext,
+		},
+		Metadata: DIDMetadata{
+			CanonicalId: fmt.Sprintf("did:%s:%s", d.config.Prefix, id),
+			Method: DIDMetadataMethod{
+				Published:          true,
+				RecoveryCommitment: recoveryCommitment,
+			},
+		},
+	}
 }

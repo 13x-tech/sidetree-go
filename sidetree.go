@@ -116,7 +116,7 @@ func (d *SideTreeIndexer) processBlock(blockheigt int64) error {
 
 	var ops []SideTreeOp
 
-	hash, err := d.srv.GetBlockHash(blockheigt)
+	hash, err := d.srv.GetBlockHash(int(blockheigt))
 	if err != nil {
 		d.errChan <- err
 	}
@@ -124,6 +124,14 @@ func (d *SideTreeIndexer) processBlock(blockheigt int64) error {
 	block, err := d.srv.GetBlock(hash)
 	if err != nil {
 		d.errChan <- err
+	}
+
+	if block == nil {
+		d.log.Errorf("block is nil for height %d", blockheigt)
+	}
+
+	if block.Transactions() == nil {
+		d.log.Errorf("block transactions is nil for height %d", blockheigt)
 	}
 
 	for i, tx := range block.Transactions() {
@@ -231,32 +239,6 @@ func (d *SideTreeIndexer) parseTxOut(b []byte) string {
 	endIndex := 2 + pushBytes
 
 	return string(b[startIndex:endIndex])
-}
-
-func (d *SideTreeIndexer) NewDIDDoc(id string, recoveryCommitment string) *DIDDoc {
-
-	var didContext []interface{}
-	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
-
-	contextBase := map[string]interface{}{}
-	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.config.Prefix, id)
-	didContext = append(didContext, contextBase)
-
-	return &DIDDoc{
-		Context: "https://w3id.org/did-resolution/v1",
-		DIDDocument: &DIDDocData{
-			ID:      id,
-			DocID:   fmt.Sprintf("did:%s:%s", d.config.Prefix, id),
-			Context: didContext,
-		},
-		Metadata: DIDMetadata{
-			CanonicalId: fmt.Sprintf("did:%s:%s", d.config.Prefix, id),
-			Method: DIDMetadataMethod{
-				Published:          true,
-				RecoveryCommitment: recoveryCommitment,
-			},
-		},
-	}
 }
 
 func checkReveal(reveal string, commitment string) bool {
