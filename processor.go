@@ -6,26 +6,26 @@ import (
 	"fmt"
 )
 
-func Processor(op SideTreeOp, indexURI string, logger Logger, storage Storage) (*OperationsProcessor, error) {
+func Processor(op SideTreeOp, indexURI string, config Config) (*OperationsProcessor, error) {
 
-	didStore, err := storage.DIDs()
+	didStore, err := config.Storage.DIDs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get did store: %w", err)
 	}
 
-	casStore, err := storage.CAS()
+	casStore, err := config.Storage.CAS()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cas store: %w", err)
 	}
 
-	indexStore, err := storage.Indexer()
+	indexStore, err := config.Storage.Indexer()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index store: %w", err)
 	}
 
 	return &OperationsProcessor{
 		op:               op,
-		log:              logger,
+		log:              config.Logger,
 		CoreIndexFileURI: indexURI,
 		didStore:         didStore,
 		casStore:         casStore,
@@ -34,8 +34,9 @@ func Processor(op SideTreeOp, indexURI string, logger Logger, storage Storage) (
 }
 
 type OperationsProcessor struct {
-	op  SideTreeOp
-	log Logger
+	config Config
+	op     SideTreeOp
+	log    Logger
 
 	CoreIndexFileURI string
 	CoreIndexFile    *CoreIndexFile
@@ -312,12 +313,12 @@ func (d *OperationsProcessor) replaceDocEntries(id string, patch map[string]inte
 
 	didDoc.DIDDocument.ResetData()
 
-	publicKeys, err := processKeys(id, doc)
+	publicKeys, err := d.processKeys(id, doc)
 	if err == nil {
 		didDoc.DIDDocument.AddPublicKeys(publicKeys)
 	}
 
-	didServices, err := processServices(doc)
+	didServices, err := d.processServices(doc)
 	if err == nil {
 		didDoc.DIDDocument.AddServices(didServices)
 	}
@@ -334,7 +335,7 @@ func (d *OperationsProcessor) addPublicKeys(id string, patch map[string]interfac
 	if err != nil {
 		return fmt.Errorf("%s failed to get DID for add-public-key: %w", id, err)
 	}
-	pubKeys, err := processKeys(id, patch)
+	pubKeys, err := d.processKeys(id, patch)
 	if err == nil {
 		doc.DIDDocument.AddPublicKeys(pubKeys)
 		if err := d.didStore.Put(doc); err != nil {
@@ -382,7 +383,7 @@ func (d *OperationsProcessor) addServices(id string, patch map[string]interface{
 		return fmt.Errorf("%s failed to get DID for add-service: %w", id, err)
 	}
 
-	services, err := processServices(patch)
+	services, err := d.processServices(patch)
 	if err == nil {
 		doc.DIDDocument.AddServices(services)
 		if err := d.didStore.Put(doc); err != nil {
@@ -519,7 +520,7 @@ func (p *OperationsProcessor) updateDIDOperations(id string) error {
 	return nil
 }
 
-func processKeys(id string, patch map[string]interface{}) ([]DIDKeyInfo, error) {
+func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{}) ([]DIDKeyInfo, error) {
 
 	keys, ok := patch["publicKeys"]
 	if !ok {
@@ -542,14 +543,16 @@ func processKeys(id string, patch map[string]interface{}) ([]DIDKeyInfo, error) 
 		}
 
 		key.ID = fmt.Sprintf("#%s", key.ID)
-		key.Controller = fmt.Sprintf("did:ion:%s", id)
+		if key.Controller == "" {
+			key.Controller = fmt.Sprintf("did:%s:%s", p.config.Prefix, id)
+		}
 		publicKeys[i] = key
 	}
 
 	return publicKeys, nil
 }
 
-func processServices(patch map[string]interface{}) ([]DIDService, error) {
+func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]DIDService, error) {
 
 	services, ok := patch["services"]
 	if !ok {

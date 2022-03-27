@@ -161,13 +161,17 @@ func (d *SideTreeIndexer) checkSignature(b []byte) bool {
 	if b[0] != 0x6a {
 		return false
 	}
+
+	prefix := d.config.Prefix + ":"
 	pushBytes := int(b[1])
 
 	if len(b) < pushBytes+2 {
 		return false
 	}
 
-	return string(b[2:2+len(d.config.Prefix)]) == d.config.Prefix
+	endIndex := 2 + len(prefix)
+
+	return string(b[2:endIndex]) == d.config.Prefix
 }
 
 func (d *SideTreeIndexer) Process() error {
@@ -200,7 +204,7 @@ func (d *SideTreeIndexer) Process() error {
 
 func (d *SideTreeIndexer) processSideTreeOperations(ops []SideTreeOp) error {
 	for _, op := range ops {
-		processor, err := Processor(op, op.CID(), d.log, d.config.Storage)
+		processor, err := Processor(op, op.CID(), d.config)
 		if err != nil {
 			return fmt.Errorf("failed to create operations processor: %w", err)
 		}
@@ -219,12 +223,40 @@ func (d *SideTreeIndexer) parseTxOut(b []byte) string {
 		return ""
 	}
 
+	prefix := d.config.Prefix + ":"
+
 	pushBytes := int(b[1])
 
-	startIndex := 2 + len(d.config.Prefix)
+	startIndex := 2 + len(prefix)
 	endIndex := 2 + pushBytes
 
 	return string(b[startIndex:endIndex])
+}
+
+func (d *SideTreeIndexer) NewDIDDoc(id string, recoveryCommitment string) *DIDDoc {
+
+	var didContext []interface{}
+	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
+
+	contextBase := map[string]interface{}{}
+	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.config.Prefix, id)
+	didContext = append(didContext, contextBase)
+
+	return &DIDDoc{
+		Context: "https://w3id.org/did-resolution/v1",
+		DIDDocument: &DIDDocData{
+			ID:      id,
+			DocID:   fmt.Sprintf("did:%s:%s", d.config.Prefix, id),
+			Context: didContext,
+		},
+		Metadata: DIDMetadata{
+			CanonicalId: fmt.Sprintf("did:%s:%s", d.config.Prefix, id),
+			Method: DIDMetadataMethod{
+				Published:          true,
+				RecoveryCommitment: recoveryCommitment,
+			},
+		},
+	}
 }
 
 func checkReveal(reveal string, commitment string) bool {
