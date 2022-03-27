@@ -69,8 +69,12 @@ func (d *SideTreeIndexer) Index() error {
 	d.errChan = make(chan error)
 
 	go func() {
-		err := <-d.errChan
-		panic(err)
+		for {
+			err := <-d.errChan
+			if err != nil {
+				panic(err)
+			}
+		}
 	}()
 
 	if !d.srv.IsCurrent() {
@@ -119,11 +123,13 @@ func (d *SideTreeIndexer) processBlock(blockheigt int64) error {
 	hash, err := d.srv.GetBlockHash(int(blockheigt))
 	if err != nil {
 		d.errChan <- err
+		return err
 	}
 
 	block, err := d.srv.GetBlock(hash)
 	if err != nil {
 		d.errChan <- err
+		return err
 	}
 
 	if block == nil {
