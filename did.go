@@ -10,32 +10,6 @@ type DIDDoc struct {
 	Metadata    DIDMetadata `json:"didDocumentMetadata"`
 }
 
-func NewDIDDoc(id string, recoveryCommitment string) *DIDDoc {
-
-	var didContext []interface{}
-	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
-
-	contextBase := map[string]interface{}{}
-	contextBase["@base"] = fmt.Sprintf("did:ion:%s", id)
-	didContext = append(didContext, contextBase)
-
-	return &DIDDoc{
-		Context: "https://w3id.org/did-resolution/v1",
-		DIDDocument: &DIDDocData{
-			ID:      id,
-			DocID:   fmt.Sprintf("did:ion:%s", id),
-			Context: didContext,
-		},
-		Metadata: DIDMetadata{
-			CanonicalId: fmt.Sprintf("did:ion:%s", id),
-			Method: DIDMetadataMethod{
-				Published:          true,
-				RecoveryCommitment: recoveryCommitment,
-			},
-		},
-	}
-}
-
 type DIDDocData struct {
 	ID                   string        `json:"-"`
 	DocID                string        `json:"id"`
