@@ -6,7 +6,12 @@ import (
 	"fmt"
 )
 
-func Processor(operations int, indexURI string, logger Logger, storage Storage) (*OperationsProcessor, error) {
+func Processor(op SideTreeOp, indexURI string, config Config) (*OperationsProcessor, error) {
+
+	storage := config.Storage()
+	if storage == nil {
+		return nil, fmt.Errorf("storage is nil")
+	}
 
 	didStore, err := storage.DIDs()
 	if err != nil {
@@ -18,17 +23,26 @@ func Processor(operations int, indexURI string, logger Logger, storage Storage) 
 		return nil, fmt.Errorf("failed to get cas store: %w", err)
 	}
 
+	indexStore, err := storage.Indexer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get index store: %w", err)
+	}
+
 	return &OperationsProcessor{
-		log:              logger,
-		opsCount:         operations,
+		op:               op,
+		config:           config,
+		log:              config.Logger(),
 		CoreIndexFileURI: indexURI,
 		didStore:         didStore,
 		casStore:         casStore,
+		indexStore:       indexStore,
 	}, nil
 }
 
 type OperationsProcessor struct {
-	log Logger
+	config Config
+	op     SideTreeOp
+	log    Logger
 
 	CoreIndexFileURI string
 	CoreIndexFile    *CoreIndexFile
@@ -46,10 +60,10 @@ type OperationsProcessor struct {
 	ChunkFileURI string
 	ChunkFile    *ChunkFile
 
-	didStore DIDs
-	casStore CAS
+	didStore   DIDs
+	casStore   CAS
+	indexStore Indexer
 
-	opsCount          int
 	deltaMappingArray []string
 	createdDelaHash   map[string]string
 }
@@ -242,7 +256,7 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 
 func (d *OperationsProcessor) createDID(id string, recoverCommitment string) error {
 
-	didDoc := NewDIDDoc(id, recoverCommitment)
+	didDoc := d.NewDIDDoc(id, recoverCommitment)
 	if err := d.didStore.Put(didDoc); err != nil {
 		return fmt.Errorf("failed to put did document: %w", err)
 	}
@@ -305,12 +319,12 @@ func (d *OperationsProcessor) replaceDocEntries(id string, patch map[string]inte
 
 	didDoc.DIDDocument.ResetData()
 
-	publicKeys, err := processKeys(id, doc)
+	publicKeys, err := d.processKeys(id, doc)
 	if err == nil {
 		didDoc.DIDDocument.AddPublicKeys(publicKeys)
 	}
 
-	didServices, err := processServices(doc)
+	didServices, err := d.processServices(doc)
 	if err == nil {
 		didDoc.DIDDocument.AddServices(didServices)
 	}
@@ -327,7 +341,7 @@ func (d *OperationsProcessor) addPublicKeys(id string, patch map[string]interfac
 	if err != nil {
 		return fmt.Errorf("%s failed to get DID for add-public-key: %w", id, err)
 	}
-	pubKeys, err := processKeys(id, patch)
+	pubKeys, err := d.processKeys(id, patch)
 	if err == nil {
 		doc.DIDDocument.AddPublicKeys(pubKeys)
 		if err := d.didStore.Put(doc); err != nil {
@@ -375,7 +389,7 @@ func (d *OperationsProcessor) addServices(id string, patch map[string]interface{
 		return fmt.Errorf("%s failed to get DID for add-service: %w", id, err)
 	}
 
-	services, err := processServices(patch)
+	services, err := d.processServices(patch)
 	if err == nil {
 		doc.DIDDocument.AddServices(services)
 		if err := d.didStore.Put(doc); err != nil {
@@ -461,31 +475,58 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 	}
 
 	p.createdDelaHash = map[string]string{}
-
 	for _, op := range coreIndex.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
 			return fmt.Errorf("failed to get uri from create operation: %w", err)
 		}
 
+		if err := p.updateDIDOperations(uri); err != nil {
+			return fmt.Errorf("failed to update did operations: %w", err)
+		}
+
 		p.createdDelaHash[uri] = op.SuffixData.DeltaHash
 		p.deltaMappingArray = append(p.deltaMappingArray, uri)
 	}
 
-	for _, ok := range coreIndex.Operations.Recover {
-		p.deltaMappingArray = append(p.deltaMappingArray, ok.DIDSuffix)
+	for _, op := range coreIndex.Operations.Recover {
+		if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
+			return fmt.Errorf("failed to update did operations: %w", err)
+		}
+
+		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
 	}
 
-	if provisionalIndex != nil {
-		for _, op := range provisionalIndex.Operations.Update {
-			p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
+	for _, op := range provisionalIndex.Operations.Update {
+		if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
+			return fmt.Errorf("failed to update did operations: %w", err)
+		}
+		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
+	}
+
+	return nil
+}
+
+func (p *OperationsProcessor) updateDIDOperations(id string) error {
+
+	var err error
+	var ops []SideTreeOp
+	ops, err = p.indexStore.GetDIDOps(id)
+	if err != nil {
+		return fmt.Errorf("failed to get did operations: %w", err)
+	}
+
+	if !OpAlreadyExists(ops, p.op) {
+		ops = append(ops, p.op)
+		if err := p.indexStore.PutDIDOps(id, ops); err != nil {
+			return fmt.Errorf("failed to put did operations: %w", err)
 		}
 	}
 
 	return nil
 }
 
-func processKeys(id string, patch map[string]interface{}) ([]DIDKeyInfo, error) {
+func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{}) ([]DIDKeyInfo, error) {
 
 	keys, ok := patch["publicKeys"]
 	if !ok {
@@ -508,14 +549,16 @@ func processKeys(id string, patch map[string]interface{}) ([]DIDKeyInfo, error) 
 		}
 
 		key.ID = fmt.Sprintf("#%s", key.ID)
-		key.Controller = fmt.Sprintf("did:ion:%s", id)
+		if key.Controller == "" {
+			key.Controller = fmt.Sprintf("did:%s:%s", p.config.Prefix(), id)
+		}
 		publicKeys[i] = key
 	}
 
 	return publicKeys, nil
 }
 
-func processServices(patch map[string]interface{}) ([]DIDService, error) {
+func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]DIDService, error) {
 
 	services, ok := patch["services"]
 	if !ok {
@@ -541,4 +584,30 @@ func processServices(patch map[string]interface{}) ([]DIDService, error) {
 	}
 
 	return didServices, nil
+}
+
+func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *DIDDoc {
+
+	var didContext []interface{}
+	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
+
+	contextBase := map[string]interface{}{}
+	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.config.Prefix(), id)
+	didContext = append(didContext, contextBase)
+
+	return &DIDDoc{
+		Context: "https://w3id.org/did-resolution/v1",
+		DIDDocument: &DIDDocData{
+			ID:      id,
+			DocID:   fmt.Sprintf("did:%s:%s", d.config.Prefix(), id),
+			Context: didContext,
+		},
+		Metadata: DIDMetadata{
+			CanonicalId: fmt.Sprintf("did:%s:%s", d.config.Prefix(), id),
+			Method: DIDMetadataMethod{
+				Published:          true,
+				RecoveryCommitment: recoveryCommitment,
+			},
+		},
+	}
 }

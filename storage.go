@@ -1,6 +1,8 @@
 package sidetree
 
-import "io"
+import (
+	"io"
+)
 
 type CAS interface {
 	Start() error
@@ -23,20 +25,12 @@ type DIDs interface {
 	List() ([]string, error)
 }
 
+// TODO: Refactor this to be generalized amongst different anchoring systems
+// Currently best suited for ION
 type Indexer interface {
 	io.Closer
-	PutBlockOps(height int64, ops []SideTreeOp) error
-	GetBlockOps(height int64) ([]SideTreeOp, error)
-	PutUnreachableCID(cid string) error
-	ListUnreachableCIDS() ([]string, error)
-}
-
-type SideTreeOp struct {
-	BlockHash    string
-	Height       int64
-	BlockTxIndex int
-	TxOutpoint   string
-	Ops          int
-	CID          string
-	Processed    bool
+	PutOps(index int, ops []SideTreeOp) error
+	GetOps(index int) ([]SideTreeOp, error)
+	PutDIDOps(id string, ops []SideTreeOp) error
+	GetDIDOps(id string) ([]SideTreeOp, error)
 }
