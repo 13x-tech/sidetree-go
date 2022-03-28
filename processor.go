@@ -13,17 +13,17 @@ func Processor(op SideTreeOp, indexURI string, config Config) (*OperationsProces
 		return nil, fmt.Errorf("storage is nil")
 	}
 
-	didStore, err := config.Storage.DIDs()
+	didStore, err := storage.DIDs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get did store: %w", err)
 	}
 
-	casStore, err := config.Storage.CAS()
+	casStore, err := storage.CAS()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cas store: %w", err)
 	}
 
-	indexStore, err := config.Storage.Indexer()
+	indexStore, err := storage.Indexer()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index store: %w", err)
 	}
