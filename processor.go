@@ -30,6 +30,7 @@ func Processor(op SideTreeOp, indexURI string, config Config) (*OperationsProces
 
 	return &OperationsProcessor{
 		op:               op,
+		config:           config,
 		log:              config.Logger(),
 		CoreIndexFileURI: indexURI,
 		didStore:         didStore,
@@ -549,7 +550,7 @@ func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{
 
 		key.ID = fmt.Sprintf("#%s", key.ID)
 		if key.Controller == "" {
-			key.Controller = fmt.Sprintf("did:%s:%s", p.config.Prefix, id)
+			key.Controller = fmt.Sprintf("did:%s:%s", p.config.Prefix(), id)
 		}
 		publicKeys[i] = key
 	}
@@ -591,18 +592,18 @@ func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *D
 	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
 
 	contextBase := map[string]interface{}{}
-	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.config.Prefix, id)
+	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.config.Prefix(), id)
 	didContext = append(didContext, contextBase)
 
 	return &DIDDoc{
 		Context: "https://w3id.org/did-resolution/v1",
 		DIDDocument: &DIDDocData{
 			ID:      id,
-			DocID:   fmt.Sprintf("did:%s:%s", d.config.Prefix, id),
+			DocID:   fmt.Sprintf("did:%s:%s", d.config.Prefix(), id),
 			Context: didContext,
 		},
 		Metadata: DIDMetadata{
-			CanonicalId: fmt.Sprintf("did:%s:%s", d.config.Prefix, id),
+			CanonicalId: fmt.Sprintf("did:%s:%s", d.config.Prefix(), id),
 			Method: DIDMetadataMethod{
 				Published:          true,
 				RecoveryCommitment: recoveryCommitment,
