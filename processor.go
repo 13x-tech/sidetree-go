@@ -8,24 +8,29 @@ import (
 
 func Processor(op SideTreeOp, indexURI string, config Config) (*OperationsProcessor, error) {
 
-	didStore, err := config.Storage.DIDs()
+	storage := config.Storage()
+	if storage == nil {
+		return nil, fmt.Errorf("storage is nil")
+	}
+
+	didStore, err := storage.DIDs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get did store: %w", err)
 	}
 
-	casStore, err := config.Storage.CAS()
+	casStore, err := storage.CAS()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cas store: %w", err)
 	}
 
-	indexStore, err := config.Storage.Indexer()
+	indexStore, err := storage.Indexer()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index store: %w", err)
 	}
 
 	return &OperationsProcessor{
 		op:               op,
-		log:              config.Logger,
+		log:              config.Logger(),
 		CoreIndexFileURI: indexURI,
 		didStore:         didStore,
 		casStore:         casStore,
