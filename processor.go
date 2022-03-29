@@ -6,9 +6,9 @@ import (
 	"fmt"
 )
 
-func Processor(op SideTreeOp, indexURI string, config Config) (*OperationsProcessor, error) {
+func Processor(op SideTreeOp, config Config) (*OperationsProcessor, error) {
 
-	if indexURI == "" {
+	if op.CID() == "" {
 		return nil, fmt.Errorf("index URI is empty")
 	}
 
@@ -36,10 +36,10 @@ func Processor(op SideTreeOp, indexURI string, config Config) (*OperationsProces
 		op:               op,
 		config:           config,
 		log:              config.Logger(),
-		CoreIndexFileURI: indexURI,
 		didStore:         didStore,
 		casStore:         casStore,
 		indexStore:       indexStore,
+		CoreIndexFileURI: op.CID(),
 	}, nil
 }
 

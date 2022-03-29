@@ -14,6 +14,32 @@ type Config interface {
 	Prefix() string
 }
 
+func New(conf Config) *SideTree {
+	return &SideTree{
+		conf: conf,
+	}
+}
+
+type SideTree struct {
+	conf Config
+}
+
+func (s *SideTree) ProcessOperations(ops []SideTreeOp) error {
+
+	for _, op := range ops {
+		processor, err := Processor(op, s.conf)
+		if err != nil {
+			return fmt.Errorf("failed to create operations processor: %w", err)
+		}
+
+		if err := processor.Process(); err != nil {
+			return fmt.Errorf("failed to process operations: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func checkReveal(reveal string, commitment string) bool {
 	rawReveal, err := base64.RawURLEncoding.DecodeString(reveal)
 	if err != nil {
