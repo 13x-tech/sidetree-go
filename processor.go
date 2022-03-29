@@ -8,6 +8,10 @@ import (
 
 func Processor(op SideTreeOp, indexURI string, config Config) (*OperationsProcessor, error) {
 
+	if indexURI == "" {
+		return nil, fmt.Errorf("index URI is empty")
+	}
+
 	storage := config.Storage()
 	if storage == nil {
 		return nil, fmt.Errorf("storage is nil")
