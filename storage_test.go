@@ -2,6 +2,7 @@ package sidetree
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -60,6 +61,14 @@ type TestCASStorage struct {
 
 func (t *TestCASStorage) Start() error {
 	return nil
+}
+
+func (t *TestCASStorage) PutGZip(data []byte) (string, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	id := fmt.Sprintf("%x", sha256.Sum256(data))
+	t.cas[id] = data
+	return id, nil
 }
 
 func (t *TestCASStorage) GetGZip(id string) ([]byte, error) {
