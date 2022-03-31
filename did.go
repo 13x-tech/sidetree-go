@@ -1,7 +1,15 @@
 package sidetree
 
 import (
+	"crypto/ecdsa"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+
+	secp256k1 "github.com/btcsuite/btcd/btcec/v2"
+	"github.com/go-jose/go-jose/v3"
+	"github.com/gowebpki/jcs"
 )
 
 type DIDDoc struct {
@@ -180,4 +188,134 @@ type DIDMetadataMethod struct {
 	Published          bool   `json:"published"`
 	RecoveryCommitment string `json:"recoveryCommitment"`
 	UpdateCommitment   string `json:"updateCommitment"`
+}
+
+func GenerateKeys() (updateKey, recoveryKey jose.JSONWebKey, err error) {
+	updateECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
+	if err != nil {
+		return
+	}
+
+	recoveryECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
+	if err != nil {
+		return
+	}
+}
+
+func NewDID(updateKey, recoveryKey jose.JSONWebKey) *DID {
+	return &DID{
+		updateKey:   &updateKey,
+		recoveryKey: &recoveryKey,
+	}
+}
+
+type DID struct {
+	Delta      *Delta      `json:"delta"`
+	SuffixData *SuffixData `json:"suffixData"`
+
+	updateReveal       *string
+	updateCommitment   *string
+	recoveryReveal     *string
+	recoveryCommitment *string
+
+	recoveryKey *jose.JSONWebKey
+	updateKey   *jose.JSONWebKey
+	pubKeys     []DIDKeyInfo
+	services    []DIDService
+}
+
+func (d *DID) AddPublicKeys(keys ...jose.JSONWebKey) error {
+	for _, key := range keys {
+		didKey, err := joseKeyToDIDKeyInfo(key)
+		if err != nil {
+			return fmt.Errorf("failed to convert key to DIDKeyInfo: %w", err)
+		}
+		d.pubKeys = append(d.pubKeys, didKey)
+	}
+	return nil
+}
+
+func (d *DID) AddServices(services ...DIDService) error {
+	d.services = append(d.services, services...)
+	return nil
+}
+
+func (d *DID) GenerateReveals() error {
+	updateReveal, updateCommitment, err := generateReveal(d.updateKey)
+	if err != nil {
+		return fmt.Errorf("failed to generate update reveal: %w", err)
+	}
+	d.updateReveal = &updateReveal
+	d.updateCommitment = &updateCommitment
+
+	recoveryReveal, recoveryCommitment, err := generateReveal(d.recoveryKey)
+	if err != nil {
+		return fmt.Errorf("failed to generate recovery reveal: %w", err)
+	}
+	d.recoveryReveal = &recoveryReveal
+	d.recoveryCommitment = &recoveryCommitment
+
+	return nil
+}
+
+func generateReveal(key *jose.JSONWebKey) (reveal, commitment string, err error) {
+	updateKeyData, err := key.MarshalJSON()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to marshal update key: %w", err)
+	}
+
+	updateKeyJSON, err := jcs.Transform(updateKeyData)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to transform update key: %w", err)
+	}
+
+	reveal, err = hashReveal(updateKeyJSON)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to hash reveal: %w", err)
+	}
+
+	commitment, err = hashCommitment(updateKeyJSON)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to hash commitment: %w", err)
+	}
+
+	return
+}
+
+func (d *DID) LongFormURI() (string, error) {
+
+	delta, err := createReplaceDelta(*d.updateCommitment, d.pubKeys, d.services)
+	if err != nil {
+		return "", fmt.Errorf("failed to create delta: %w", err)
+	}
+
+	d.Delta = &delta
+
+	deltaHash, err := delta.Hash()
+	if err != nil {
+		return "", fmt.Errorf("failed to hash delta: %w", err)
+	}
+
+	d.SuffixData.DeltaHash = deltaHash
+	d.SuffixData.RecoveryCommitment = *d.recoveryCommitment
+
+	didSuffix, err := d.SuffixData.URI()
+	if err != nil {
+		return "", fmt.Errorf("failed to create suffix: %w", err)
+	}
+
+	didData, err := json.Marshal(d)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal DID: %w", err)
+	}
+
+	jsonData, err := jcs.Transform(didData)
+	if err != nil {
+		return "", fmt.Errorf("failed to transform DID: %w", err)
+	}
+
+	b64Data := base64.RawURLEncoding.EncodeToString(jsonData)
+
+	return fmt.Sprintf("did:ion:%s:%s", didSuffix, b64Data), nil
+
 }
