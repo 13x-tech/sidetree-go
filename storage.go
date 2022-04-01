@@ -22,10 +22,10 @@ type Storage interface {
 
 type DIDs interface {
 	io.Closer
-	Put(doc *did.Doc) error
+	Put(doc *did.Document) error
 	Deactivate(id string) error
 	Recover(id string) error
-	Get(id string) (*did.Doc, error)
+	Get(id string) (*did.Document, error)
 	List() ([]string, error)
 }
 

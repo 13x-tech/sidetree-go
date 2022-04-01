@@ -3,17 +3,14 @@ module github.com/13x-tech/sidetree-go
 go 1.17
 
 require (
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/gowebpki/jcs v1.0.0
 	github.com/lestrrat-go/jwx/v2 v2.0.0-20220329235520-6a0452901a57
 	github.com/multiformats/go-multihash v0.1.0
 )
 
 require (
-	github.com/btcsuite/btcd/btcec/v2 v2.1.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1 v1.0.3 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1/v2 v2.0.0 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/goccy/go-json v0.9.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.1 // indirect

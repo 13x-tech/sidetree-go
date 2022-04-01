@@ -25,7 +25,7 @@ func NewTestStorage() *TestStorage {
 			didOps:   map[string][]SideTreeOp{},
 		},
 		dids: &TestDIDsStorage{
-			dids:        map[string]*did.Doc{},
+			dids:        map[string]*did.Document{},
 			deactivated: map[string]struct{}{},
 			mu:          sync.Mutex{},
 		},
@@ -93,14 +93,14 @@ func (t *TestCASStorage) insertObject(id string, data []byte) error {
 type TestDIDsStorage struct {
 	Closer
 	mu          sync.Mutex
-	dids        map[string]*did.Doc
+	dids        map[string]*did.Document
 	deactivated map[string]struct{}
 }
 
-func (t *TestDIDsStorage) Put(doc *did.Doc) error {
+func (t *TestDIDsStorage) Put(doc *did.Document) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.dids[doc.DIDDocument.ID] = doc
+	t.dids[doc.Document.ID] = doc
 	return nil
 }
 
@@ -118,7 +118,7 @@ func (t *TestDIDsStorage) Recover(id string) error {
 	return nil
 }
 
-func (t *TestDIDsStorage) Get(id string) (*did.Doc, error) {
+func (t *TestDIDsStorage) Get(id string) (*did.Document, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.deactivated[id]
@@ -270,7 +270,7 @@ func TestDIDs(t *testing.T) {
 		t.Errorf("Error putting DID: %v", err)
 	}
 
-	doc2, err := dids.Get(doc.DIDDocument.ID)
+	doc2, err := dids.Get(doc.Document.ID)
 	if err != nil {
 		t.Errorf("Error getting DID: %v", err)
 	}
@@ -279,20 +279,20 @@ func TestDIDs(t *testing.T) {
 		t.Errorf("DIDs not equal: %v", doc)
 	}
 
-	if err := dids.Deactivate(doc.DIDDocument.ID); err != nil {
+	if err := dids.Deactivate(doc.Document.ID); err != nil {
 		t.Errorf("Error deactivating DID: %v", err)
 	}
 
-	_, err = dids.Get(doc.DIDDocument.ID)
+	_, err = dids.Get(doc.Document.ID)
 	if err == nil {
 		t.Errorf("Deactivated did should not be found")
 	}
 
-	if err := dids.Recover(doc.DIDDocument.ID); err != nil {
+	if err := dids.Recover(doc.Document.ID); err != nil {
 		t.Errorf("Error recovering DID: %v", err)
 	}
 
-	doc3, err := dids.Get(doc.DIDDocument.ID)
+	doc3, err := dids.Get(doc.Document.ID)
 	if err != nil {
 		t.Errorf("Error getting DID: %v", err)
 	}
@@ -338,25 +338,25 @@ func TestCAS(t *testing.T) {
 
 }
 
-func testDoc() *did.Doc {
+func testDoc() *did.Document {
 
-	return &did.Doc{
+	return &did.Document{
 		Context: "https://w3id.org/did-resolution/v1",
-		DIDDocument: &did.DIDDocData{
+		Document: &did.DocumentData{
 			ID:    "EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
 			DocID: "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
 			Context: []interface{}{
 				"https://www.w3.org/ns/did/v1",
 				map[string]interface{}{"@base": "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ"},
 			},
-			Services: []did.DIDService{{
+			Services: []did.Service{{
 				ID:   "#linkeddomains",
 				Type: "LinkedDomains",
 				ServiceEndpoint: map[string]interface{}{
 					"origins": []string{"https://woodgrove.com/"},
 				},
 			}},
-			Verification: []did.DIDKeyInfo{{
+			Verification: []did.KeyInfo{{
 				ID:         "#sig_44a9661f",
 				Controller: "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
 				Type:       "EcdsaSecp256k1VerificationKey2019",
@@ -373,9 +373,9 @@ func testDoc() *did.Doc {
 			CapabilityInvocation: []string{"#sig_44a9661f"},
 			KeyAgreement:         []string{"#sig_44a9661f"},
 		},
-		Metadata: did.DIDMetadata{
+		Metadata: did.Metadata{
 			CanonicalId: "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
-			Method: did.DIDMetadataMethod{
+			Method: did.MetadataMethod{
 				Published:          true,
 				UpdateCommitment:   "EiAGj7alOM1_2pVQv_Phbw3928zlVWWvMYuLsvuDnSuImg",
 				RecoveryCommitment: "EiB_FKDwQpnzkrD9Rwvu9puF8WUYdOvO06lX1F0LoF7WKw",

@@ -96,7 +96,7 @@ func (p *CoreProofFile) processRecover(id string, revealValue string, op SignedR
 		return fmt.Errorf("failed to get did document for %s: %w", id, err)
 	}
 
-	didDoc.DIDDocument.ResetData()
+	didDoc.Document.ResetData()
 
 	if err := p.processor.didStore.Put(didDoc); err != nil {
 		return fmt.Errorf("failed to put did document for %s: %w", id, err)

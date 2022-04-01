@@ -324,16 +324,16 @@ func (d *OperationsProcessor) replaceDocEntries(id string, patch map[string]inte
 		return fmt.Errorf("%s patch does not have document: %+v", id, patch)
 	}
 
-	didDoc.DIDDocument.ResetData()
+	didDoc.Document.ResetData()
 
 	publicKeys, err := d.processKeys(id, doc)
 	if err == nil {
-		didDoc.DIDDocument.AddPublicKeys(publicKeys)
+		didDoc.Document.AddPublicKeys(publicKeys)
 	}
 
 	didServices, err := d.processServices(doc)
 	if err == nil {
-		didDoc.DIDDocument.AddServices(didServices)
+		didDoc.Document.AddServices(didServices)
 	}
 
 	if err := d.didStore.Put(didDoc); err != nil {
@@ -350,7 +350,7 @@ func (d *OperationsProcessor) addPublicKeys(id string, patch map[string]interfac
 	}
 	pubKeys, err := d.processKeys(id, patch)
 	if err == nil {
-		doc.DIDDocument.AddPublicKeys(pubKeys)
+		doc.Document.AddPublicKeys(pubKeys)
 		if err := d.didStore.Put(doc); err != nil {
 			return fmt.Errorf("%s failed to put DID: %w", id, err)
 		}
@@ -374,12 +374,12 @@ func (d *OperationsProcessor) removePublicKeys(id string, patch map[string]inter
 		for _, pubKey := range pKeyInterfaces {
 			key, ok := pubKey.(string)
 			if !ok {
-				return fmt.Errorf("%s patch pubKey ids do not cast to string: %s", doc.DIDDocument.ID, patch)
+				return fmt.Errorf("%s patch pubKey ids do not cast to string: %s", doc.Document.ID, patch)
 			}
 			pubKeys = append(pubKeys, key)
 		}
 
-		if err := doc.DIDDocument.RemovePublicKeys(pubKeys); err != nil {
+		if err := doc.Document.RemovePublicKeys(pubKeys); err != nil {
 			return fmt.Errorf("%s failed to remove public keys: %w", id, err)
 		} else {
 			if err := d.didStore.Put(doc); err != nil {
@@ -398,7 +398,7 @@ func (d *OperationsProcessor) addServices(id string, patch map[string]interface{
 
 	services, err := d.processServices(patch)
 	if err == nil {
-		doc.DIDDocument.AddServices(services)
+		doc.Document.AddServices(services)
 		if err := d.didStore.Put(doc); err != nil {
 			return fmt.Errorf("%s failed to put DID: %w", id, err)
 		}
@@ -414,23 +414,23 @@ func (d *OperationsProcessor) removeServices(id string, patch map[string]interfa
 
 	sInterfaces, ok := patch["ids"].([]interface{})
 	if !ok {
-		return fmt.Errorf("%s patch does not have service ids: %s", doc.DIDDocument.ID, patch)
+		return fmt.Errorf("%s patch does not have service ids: %s", doc.Document.ID, patch)
 	} else {
 
 		var services []string
 		for _, s := range sInterfaces {
 			service, ok := s.(string)
 			if !ok {
-				return fmt.Errorf("%s patch service ids do not cast to string: %s", doc.DIDDocument.ID, patch)
+				return fmt.Errorf("%s patch service ids do not cast to string: %s", doc.Document.ID, patch)
 			}
 			services = append(services, service)
 		}
 
-		if err := doc.DIDDocument.RemoveServices(services); err != nil {
-			return fmt.Errorf("%s failed to remove services: %w", doc.DIDDocument.ID, err)
+		if err := doc.Document.RemoveServices(services); err != nil {
+			return fmt.Errorf("%s failed to remove services: %w", doc.Document.ID, err)
 		} else {
 			if err := d.didStore.Put(doc); err != nil {
-				return fmt.Errorf("%s failed to put DID: %w", doc.DIDDocument.ID, err)
+				return fmt.Errorf("%s failed to put DID: %w", doc.Document.ID, err)
 			}
 		}
 	}
@@ -533,14 +533,14 @@ func (p *OperationsProcessor) updateDIDOperations(id string) error {
 	return nil
 }
 
-func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{}) ([]did.DIDKeyInfo, error) {
+func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{}) ([]did.KeyInfo, error) {
 
 	keys, ok := patch["publicKeys"]
 	if !ok {
 		return nil, fmt.Errorf("publicKeys not found")
 	}
 
-	var publicKeys []did.DIDKeyInfo
+	var publicKeys []did.KeyInfo
 	keyBytes, err := json.Marshal(keys)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal publicKeys: %w", err)
@@ -565,14 +565,14 @@ func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{
 	return publicKeys, nil
 }
 
-func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]did.DIDService, error) {
+func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]did.Service, error) {
 
 	services, ok := patch["services"]
 	if !ok {
 		return nil, fmt.Errorf("services not found")
 	}
 
-	var didServices []did.DIDService
+	var didServices []did.Service
 	serviceBytes, err := json.Marshal(services)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal services: %w", err)
@@ -593,7 +593,7 @@ func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]d
 	return didServices, nil
 }
 
-func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.Doc {
+func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.Document {
 
 	var didContext []interface{}
 	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
@@ -602,16 +602,16 @@ func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *d
 	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.prefix, id)
 	didContext = append(didContext, contextBase)
 
-	return &did.Doc{
+	return &did.Document{
 		Context: "https://w3id.org/did-resolution/v1",
-		DIDDocument: &did.DIDDocData{
+		Document: &did.DocumentData{
 			ID:      id,
 			DocID:   fmt.Sprintf("did:%s:%s", d.prefix, id),
 			Context: didContext,
 		},
-		Metadata: did.DIDMetadata{
+		Metadata: did.Metadata{
 			CanonicalId: fmt.Sprintf("did:%s:%s", d.prefix, id),
-			Method: did.DIDMetadataMethod{
+			Method: did.MetadataMethod{
 				Published:          true,
 				RecoveryCommitment: recoveryCommitment,
 			},

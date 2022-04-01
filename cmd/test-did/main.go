@@ -16,7 +16,7 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
-func genKey(crv elliptic.Curve, purposes []string) (did.DIDKeyInfo, error) {
+func genKey(crv elliptic.Curve, purposes []string) (did.KeyInfo, error) {
 	key, err := ecdsa.GenerateKey(crv, rand.Reader)
 	if err != nil {
 		panic(err)
@@ -45,7 +45,7 @@ func main() {
 		panic(err)
 	}
 
-	services := []did.DIDService{
+	services := []did.Service{
 		{
 			ID:   "linkeddomains",
 			Type: "LinkedDomains",
@@ -62,7 +62,7 @@ func main() {
 		},
 	}
 
-	did, err := did.CreateDID(
+	did, err := did.Create(
 		did.WithGenerateKeys(crv),
 		did.WithPubKeys(key1, key2),
 		did.WithServices(services...),
@@ -87,9 +87,9 @@ func main() {
 
 }
 
-func JWKtoDIDKey(key jwk.Key, purposes []string) (did.DIDKeyInfo, error) {
+func JWKtoDIDKey(key jwk.Key, purposes []string) (did.KeyInfo, error) {
 
-	didKey := did.DIDKeyInfo{}
+	didKey := did.KeyInfo{}
 
 	fingerPrint, err := key.Thumbprint(crypto.SHA256)
 	if err != nil {
@@ -99,22 +99,22 @@ func JWKtoDIDKey(key jwk.Key, purposes []string) (did.DIDKeyInfo, error) {
 	didKey.ID = fmt.Sprintf("sig_%x", fingerPrint[len(fingerPrint)-4:])
 	didKey.Type, err = keyType(key)
 	if err != nil {
-		return did.DIDKeyInfo{}, fmt.Errorf("failed to get key type: %w", err)
+		return did.KeyInfo{}, fmt.Errorf("failed to get key type: %w", err)
 	}
 
 	keyData, err := json.Marshal(key)
 	if err != nil {
-		return did.DIDKeyInfo{}, fmt.Errorf("failed to marshal key: %w", err)
+		return did.KeyInfo{}, fmt.Errorf("failed to marshal key: %w", err)
 	}
 
 	keyJSON, err := jcs.Transform(keyData)
 	if err != nil {
-		return did.DIDKeyInfo{}, fmt.Errorf("failed to transform key: %w", err)
+		return did.KeyInfo{}, fmt.Errorf("failed to transform key: %w", err)
 	}
 
 	var keyMap map[string]interface{}
 	if err := json.Unmarshal(keyJSON, &keyMap); err != nil {
-		return did.DIDKeyInfo{}, fmt.Errorf("failed to unmarshal key: %w", err)
+		return did.KeyInfo{}, fmt.Errorf("failed to unmarshal key: %w", err)
 	}
 
 	didKey.PubKey = keyMap
