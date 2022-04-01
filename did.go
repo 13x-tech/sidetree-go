@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	secp256k1 "github.com/btcsuite/btcd/btcec/v2"
-	"github.com/go-jose/go-jose/v3"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/gowebpki/jcs"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 type DIDDoc struct {
@@ -164,7 +164,7 @@ func (d *DIDDocData) RemoveServices(services []string) error {
 
 type DIDKeyInfo struct {
 	ID         string                 `json:"id"`
-	Controller string                 `json:"controller"`
+	Controller string                 `json:"controller,omitempty"`
 	Type       string                 `json:"type"`
 	PubKey     map[string]interface{} `json:"publicKeyJwk,omitempty"`
 	Multibase  string                 `json:"publicKeyMultibase,omitempty"`
@@ -190,23 +190,90 @@ type DIDMetadataMethod struct {
 	UpdateCommitment   string `json:"updateCommitment"`
 }
 
-func GenerateKeys() (updateKey, recoveryKey jose.JSONWebKey, err error) {
+func GenerateKeys() (updateKey, recoveryKey jwk.Key, err error) {
 	updateECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 	if err != nil {
+		err = fmt.Errorf("failed to generate update key: %w", err)
+		return
+	}
+
+	updateKey, err = jwk.FromRaw(updateECDSA)
+	if err != nil {
+		err = fmt.Errorf("failed to transform update key: %w", err)
 		return
 	}
 
 	recoveryECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 	if err != nil {
+		err = fmt.Errorf("failed to generate recovery key: %w", err)
 		return
+	}
+
+	recoveryKey, err = jwk.FromRaw(recoveryECDSA)
+	if err != nil {
+		err = fmt.Errorf("failed to transform recovery key: %w", err)
+		return
+	}
+
+	return
+}
+
+type DIDOption func(*DID) error
+
+func WithUpdateKey(key jwk.Key) DIDOption {
+	return func(d *DID) error {
+		d.updateKey = key
+		return nil
 	}
 }
 
-func NewDID(updateKey, recoveryKey jose.JSONWebKey) *DID {
-	return &DID{
-		updateKey:   &updateKey,
-		recoveryKey: &recoveryKey,
+func WithRecoverKey(key jwk.Key) DIDOption {
+	return func(d *DID) error {
+		d.recoveryKey = key
+		return nil
 	}
+}
+
+func WithGenerateKeys() DIDOption {
+	return func(d *DID) error {
+		updateKey, recoveryKey, err := GenerateKeys()
+		if err != nil {
+			return err
+		}
+		d.updateKey = updateKey
+		d.recoveryKey = recoveryKey
+		return nil
+	}
+}
+
+func WithServices(services ...DIDService) DIDOption {
+	return func(d *DID) error {
+		return d.AddServices(services...)
+	}
+}
+
+func WithPubKeys(keys ...jwk.Key) DIDOption {
+	return func(d *DID) error {
+		return d.AddPublicKeys(keys...)
+	}
+}
+
+func NewDID(options ...DIDOption) (*DID, error) {
+	d := &DID{}
+	for _, option := range options {
+		if err := option(d); err != nil {
+			return nil, err
+		}
+	}
+
+	if d.updateKey == nil || d.recoveryKey == nil {
+		return nil, fmt.Errorf("update and recovery keys must be provided")
+	}
+
+	if err := d.generateReveals(); err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 type DID struct {
@@ -218,13 +285,13 @@ type DID struct {
 	recoveryReveal     *string
 	recoveryCommitment *string
 
-	recoveryKey *jose.JSONWebKey
-	updateKey   *jose.JSONWebKey
+	recoveryKey jwk.Key
+	updateKey   jwk.Key
 	pubKeys     []DIDKeyInfo
 	services    []DIDService
 }
 
-func (d *DID) AddPublicKeys(keys ...jose.JSONWebKey) error {
+func (d *DID) AddPublicKeys(keys ...jwk.Key) error {
 	for _, key := range keys {
 		didKey, err := joseKeyToDIDKeyInfo(key)
 		if err != nil {
@@ -240,7 +307,7 @@ func (d *DID) AddServices(services ...DIDService) error {
 	return nil
 }
 
-func (d *DID) GenerateReveals() error {
+func (d *DID) generateReveals() error {
 	updateReveal, updateCommitment, err := generateReveal(d.updateKey)
 	if err != nil {
 		return fmt.Errorf("failed to generate update reveal: %w", err)
@@ -258,8 +325,9 @@ func (d *DID) GenerateReveals() error {
 	return nil
 }
 
-func generateReveal(key *jose.JSONWebKey) (reveal, commitment string, err error) {
-	updateKeyData, err := key.MarshalJSON()
+func generateReveal(key jwk.Key) (reveal, commitment string, err error) {
+
+	updateKeyData, err := json.Marshal(key)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to marshal update key: %w", err)
 	}
@@ -296,8 +364,12 @@ func (d *DID) LongFormURI() (string, error) {
 		return "", fmt.Errorf("failed to hash delta: %w", err)
 	}
 
-	d.SuffixData.DeltaHash = deltaHash
-	d.SuffixData.RecoveryCommitment = *d.recoveryCommitment
+	suffixData := SuffixData{
+		DeltaHash:          deltaHash,
+		RecoveryCommitment: *d.recoveryCommitment,
+	}
+
+	d.SuffixData = &suffixData
 
 	didSuffix, err := d.SuffixData.URI()
 	if err != nil {
@@ -317,5 +389,4 @@ func (d *DID) LongFormURI() (string, error) {
 	b64Data := base64.RawURLEncoding.EncodeToString(jsonData)
 
 	return fmt.Sprintf("did:ion:%s:%s", didSuffix, b64Data), nil
-
 }

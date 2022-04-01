@@ -6,45 +6,46 @@ import (
 	"fmt"
 )
 
-func Processor(op SideTreeOp, config Config) (*OperationsProcessor, error) {
+func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, error) {
 
 	if op.CID() == "" {
 		return nil, fmt.Errorf("index URI is empty")
 	}
 
-	storage := config.Storage()
-	if storage == nil {
-		return nil, fmt.Errorf("storage is nil")
-	}
-
-	didStore, err := storage.DIDs()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get did store: %w", err)
-	}
-
-	casStore, err := storage.CAS()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cas store: %w", err)
-	}
-
-	indexStore, err := storage.Indexer()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get index store: %w", err)
-	}
-
-	return &OperationsProcessor{
+	d := &OperationsProcessor{
 		op:               op,
-		config:           config,
-		log:              config.Logger(),
-		didStore:         didStore,
-		casStore:         casStore,
-		indexStore:       indexStore,
 		CoreIndexFileURI: op.CID(),
-	}, nil
+	}
+
+	for _, option := range options {
+		option(d)
+	}
+
+	if d.prefix == "" {
+		return nil, fmt.Errorf("prefix is empty")
+	}
+
+	if d.log == nil {
+		return nil, fmt.Errorf("logger is not set")
+	}
+
+	if d.didStore == nil {
+		return nil, fmt.Errorf("did store is not set")
+	}
+
+	if d.casStore == nil {
+		return nil, fmt.Errorf("cas store is not set")
+	}
+
+	if d.indexStore == nil {
+		return nil, fmt.Errorf("index store is not set")
+	}
+
+	return d, nil
 }
 
 type OperationsProcessor struct {
-	config Config
+	prefix string
 	op     SideTreeOp
 	log    Logger
 
@@ -554,7 +555,7 @@ func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{
 
 		key.ID = fmt.Sprintf("#%s", key.ID)
 		if key.Controller == "" {
-			key.Controller = fmt.Sprintf("did:%s:%s", p.config.Prefix(), id)
+			key.Controller = fmt.Sprintf("did:%s:%s", p.prefix, id)
 		}
 		publicKeys[i] = key
 	}
@@ -596,18 +597,18 @@ func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *D
 	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
 
 	contextBase := map[string]interface{}{}
-	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.config.Prefix(), id)
+	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.prefix, id)
 	didContext = append(didContext, contextBase)
 
 	return &DIDDoc{
 		Context: "https://w3id.org/did-resolution/v1",
 		DIDDocument: &DIDDocData{
 			ID:      id,
-			DocID:   fmt.Sprintf("did:%s:%s", d.config.Prefix(), id),
+			DocID:   fmt.Sprintf("did:%s:%s", d.prefix, id),
 			Context: didContext,
 		},
 		Metadata: DIDMetadata{
-			CanonicalId: fmt.Sprintf("did:%s:%s", d.config.Prefix(), id),
+			CanonicalId: fmt.Sprintf("did:%s:%s", d.prefix, id),
 			Method: DIDMetadataMethod{
 				Published:          true,
 				RecoveryCommitment: recoveryCommitment,

@@ -9,7 +9,10 @@ require (
 )
 
 require (
+	github.com/btcsuite/btcd/btcec/v2 v2.1.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1 v1.0.3 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v2 v2.0.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/goccy/go-json v0.9.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect

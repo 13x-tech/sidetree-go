@@ -7,31 +7,84 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/go-jose/go-jose/v3"
 	"github.com/gowebpki/jcs"
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 	mh "github.com/multiformats/go-multihash"
 )
 
-type Config interface {
-	Logger() Logger
-	Storage() Storage
-	Prefix() string
-}
+type SidetreeOption func(interface{})
 
-func New(conf Config) *SideTree {
-	return &SideTree{
-		conf: conf,
+func WithPrefix(prefix string) SidetreeOption {
+	return func(d interface{}) {
+		switch t := d.(type) {
+		case *SideTree:
+			t.prefix = prefix
+		case *OperationsProcessor:
+			t.prefix = prefix
+		}
 	}
 }
 
+func WithStorage(storage Storage) SidetreeOption {
+	return func(d interface{}) {
+
+		switch t := d.(type) {
+		case *SideTree:
+			t.store = storage
+		case *OperationsProcessor:
+			didStore, err := storage.DIDs()
+			if err != nil {
+				return
+			}
+
+			casStore, err := storage.CAS()
+			if err != nil {
+				return
+			}
+
+			indexStore, err := storage.Indexer()
+			if err != nil {
+				return
+			}
+			t.didStore = didStore
+			t.casStore = casStore
+			t.indexStore = indexStore
+		}
+
+	}
+}
+
+func WithLogger(log Logger) SidetreeOption {
+	return func(d interface{}) {
+		switch t := d.(type) {
+		case *SideTree:
+			t.log = log
+		case *OperationsProcessor:
+			t.log = log
+		}
+	}
+}
+
+func New(options ...SidetreeOption) *SideTree {
+	return &SideTree{}
+}
+
 type SideTree struct {
-	conf Config
+	prefix string
+	store  Storage
+	log    Logger
 }
 
 func (s *SideTree) ProcessOperations(ops []SideTreeOp) error {
 
 	for _, op := range ops {
-		processor, err := Processor(op, s.conf)
+		processor, err := Processor(
+			op,
+			WithPrefix(s.prefix),
+			WithStorage(s.store),
+			WithLogger(s.log),
+		)
 		if err != nil {
 			return fmt.Errorf("failed to create operations processor: %w", err)
 		}
@@ -44,12 +97,12 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp) error {
 	return nil
 }
 
-func Create(updateKey, recoveryKey jose.JSONWebKey, publicKeys []jose.JSONWebKey, services []DIDService) (Delta, CreateOperation, error) {
+func Create(updateKey, recoveryKey jwk.Key, publicKeys []jwk.Key, services []DIDService) (Delta, CreateOperation, error) {
 
 	var delta Delta
 	var create CreateOperation
 
-	updateKeyData, err := updateKey.MarshalJSON()
+	updateKeyData, err := json.Marshal(updateKey)
 	if err != nil {
 		return delta, create, fmt.Errorf("failed to marshal update key: %w", err)
 	}
@@ -83,7 +136,7 @@ func Create(updateKey, recoveryKey jose.JSONWebKey, publicKeys []jose.JSONWebKey
 		return delta, create, fmt.Errorf("failed to hash delta: %w", err)
 	}
 
-	recoverKeyData, err := recoveryKey.MarshalJSON()
+	recoverKeyData, err := json.Marshal(recoveryKey)
 	if err != nil {
 		return delta, create, fmt.Errorf("failed to marshal recovery key: %w", err)
 	}
@@ -108,7 +161,7 @@ func Create(updateKey, recoveryKey jose.JSONWebKey, publicKeys []jose.JSONWebKey
 	return delta, create, nil
 }
 
-func joseKeyToDIDKeyInfo(key jose.JSONWebKey) (DIDKeyInfo, error) {
+func joseKeyToDIDKeyInfo(key jwk.Key) (DIDKeyInfo, error) {
 
 	didKey := DIDKeyInfo{}
 
@@ -117,13 +170,13 @@ func joseKeyToDIDKeyInfo(key jose.JSONWebKey) (DIDKeyInfo, error) {
 		return didKey, fmt.Errorf("failed to get key id: %w", err)
 	}
 
-	didKey.ID = fmt.Sprintf("sig_%x", fingerPrint)
+	didKey.ID = fmt.Sprintf("sig_%x", fingerPrint[len(fingerPrint)-4:])
 	didKey.Type, err = keyType(key)
 	if err != nil {
 		return DIDKeyInfo{}, fmt.Errorf("failed to get key type: %w", err)
 	}
 
-	keyData, err := key.MarshalJSON()
+	keyData, err := json.Marshal(key)
 	if err != nil {
 		return DIDKeyInfo{}, fmt.Errorf("failed to marshal key: %w", err)
 	}
@@ -143,17 +196,23 @@ func joseKeyToDIDKeyInfo(key jose.JSONWebKey) (DIDKeyInfo, error) {
 
 }
 
-func keyType(key jose.JSONWebKey) (string, error) {
-	switch jose.SignatureAlgorithm(key.Algorithm) {
-	case jose.EdDSA:
-		return "Ed25519VerificationKey2018", nil
-	case jose.RS256, jose.RS384, jose.RS512:
-		return "RsaVerificationKey2018", nil
-	case jose.ES256K:
+//TODO: this is wrong
+func keyType(key jwk.Key) (string, error) {
+	switch key.Algorithm() {
+	case jwa.ES256K:
 		return "EcdsaSecp256k1VerificationKey2019", nil
-
+	case jwa.Ed25519:
+		return "Ed25519VerificationKey2018", nil
+	case jwa.RSA, jwa.RSA1_5, jwa.RSA_OAEP, jwa.RSA_OAEP_256:
+		return "RsaVerificationKey2018", nil
+	case jwa.X25519:
+		return "X25519KeyAgreementKey2019", nil
 	default:
-		return "", fmt.Errorf("unsupported key type: %s", key.Algorithm)
+		return "JsonWebKey2020", nil
+		// return "Bls12381G2Key2020", nil
+		// return "Bls12381G1Key2020", nil
+		// return "SchnorrSecp256k1VerificationKey2019", nil
+		// return "PgpVerificationKey2021", nil
 	}
 }
 
@@ -177,10 +236,11 @@ func createReplaceDelta(updateCommitment string, publicKeys []DIDKeyInfo, servic
 		if err != nil {
 			return Delta{}, fmt.Errorf("failed to create services map: %w", err)
 		}
-		document["service"] = serviceMap
+		document["services"] = serviceMap
 	}
 
 	patch := map[string]interface{}{
+		"action":   "replace",
 		"document": document,
 	}
 
@@ -190,7 +250,7 @@ func createReplaceDelta(updateCommitment string, publicKeys []DIDKeyInfo, servic
 	}, nil
 }
 
-func createPublicKeyMap(pubKeys []DIDKeyInfo) (map[string]interface{}, error) {
+func createPublicKeyMap(pubKeys []DIDKeyInfo) (interface{}, error) {
 	keyData, err := json.Marshal(pubKeys)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal public key: %w", err)
@@ -206,13 +266,10 @@ func createPublicKeyMap(pubKeys []DIDKeyInfo) (map[string]interface{}, error) {
 	if err := json.Unmarshal(keyJSON, &keyMap); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal public key: %w", err)
 	}
-
-	return map[string]interface{}{
-		"publicKeys": keyMap,
-	}, nil
+	return keyMap, nil
 }
 
-func createServicesMap(services []DIDService) (map[string]interface{}, error) {
+func createServicesMap(services []DIDService) (interface{}, error) {
 	serviceData, err := json.Marshal(services)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal services: %w", err)
@@ -229,9 +286,7 @@ func createServicesMap(services []DIDService) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("failed to unmarshal services: %w", err)
 	}
 
-	return map[string]interface{}{
-		"service": serviceMap,
-	}, nil
+	return serviceMap, nil
 }
 
 func checkReveal(reveal string, commitment string) bool {
