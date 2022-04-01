@@ -1,17 +1,13 @@
 package sidetree
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 
-	"github.com/gowebpki/jcs"
-	mh "github.com/multiformats/go-multihash"
+	"github.com/13x-tech/sidetree-go/internal/did"
 )
 
 type ChunkFile struct {
-	Deltas []Delta `json:"deltas"`
+	Deltas []did.Delta `json:"deltas"`
 
 	processor *OperationsProcessor
 }
@@ -72,7 +68,7 @@ func (c *ChunkFile) updateDeltaHash(id string) (string, bool) {
 	return deltaHash, ok
 }
 
-func (c *ChunkFile) processDelta(index int, delta Delta) error {
+func (c *ChunkFile) processDelta(index int, delta did.Delta) error {
 	id := c.processor.deltaMappingArray[index]
 
 	if deltaHash, ok := c.createdDeltaHash(id); ok {
@@ -120,30 +116,4 @@ func (c *ChunkFile) processDelta(index int, delta Delta) error {
 	}
 
 	return nil
-}
-
-type Delta struct {
-	Patches          []map[string]interface{} `json:"patches"`
-	UpdateCommitment string                   `json:"updateCommitment"`
-}
-
-func (d *Delta) Hash() (string, error) {
-	deltaBytes, err := json.Marshal(d)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal delta for hashing: %w", err)
-	}
-
-	deltaJSON, err := jcs.Transform(deltaBytes)
-	if err != nil {
-		return "", fmt.Errorf("failed to transform delta for hashing: %w", err)
-	}
-
-	shaDelta := sha256.Sum256(deltaJSON)
-	hashed, err := mh.Encode(shaDelta[:], mh.SHA2_256)
-
-	if err != nil {
-		return "", fmt.Errorf("failed to multihash encode sha256: %w", err)
-	}
-
-	return base64.RawURLEncoding.EncodeToString(hashed), nil
 }

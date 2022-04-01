@@ -2,11 +2,15 @@ package sidetree
 
 import (
 	"io"
+
+	"github.com/13x-tech/sidetree-go/internal/did"
 )
 
 type CAS interface {
+	io.Closer
 	Start() error
 	GetGZip(id string) ([]byte, error)
+	PutGZip(data []byte) (string, error)
 }
 
 type Storage interface {
@@ -18,10 +22,10 @@ type Storage interface {
 
 type DIDs interface {
 	io.Closer
-	Put(doc *DIDDoc) error
+	Put(doc *did.Document) error
 	Deactivate(id string) error
 	Recover(id string) error
-	Get(id string) (*DIDDoc, error)
+	Get(id string) (*did.Document, error)
 	List() ([]string, error)
 }
 
@@ -33,4 +37,16 @@ type Indexer interface {
 	GetOps(index int) ([]SideTreeOp, error)
 	PutDIDOps(id string, ops []SideTreeOp) error
 	GetDIDOps(id string) ([]SideTreeOp, error)
+}
+
+type WalletStore interface {
+	io.Closer
+	PutRecoveryKey(id string, key []byte) error
+	GetRecoveryKey(id string) ([]byte, error)
+	PutUpdateKey(id string, key []byte) error
+	GetUpdateKey(id string) ([]byte, error)
+	PutUpdateReveal(id string, reveal string) error
+	GetUpdateReveal(id string) (string, error)
+	PutRecoveryReveal(id string, reveal string) error
+	GetRecoveryReveal(id string) (string, error)
 }

@@ -1,28 +1,28 @@
-package sidetree
+package did
 
 import (
 	"testing"
 )
 
-func testDoc() *DIDDoc {
+func testDoc() *Document {
 
-	return &DIDDoc{
+	return &Document{
 		Context: "https://w3id.org/did-resolution/v1",
-		DIDDocument: &DIDDocData{
+		Document: &DocumentData{
 			ID:    "EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
 			DocID: "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
 			Context: []interface{}{
 				"https://www.w3.org/ns/did/v1",
 				map[string]interface{}{"@base": "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ"},
 			},
-			Services: []DIDService{{
+			Services: []Service{{
 				ID:   "#linkeddomains",
 				Type: "LinkedDomains",
 				ServiceEndpoint: map[string]interface{}{
 					"origins": []string{"https://woodgrove.com/"},
 				},
 			}},
-			Verification: []DIDKeyInfo{{
+			Verification: []KeyInfo{{
 				ID:         "#sig_44a9661f",
 				Controller: "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
 				Type:       "EcdsaSecp256k1VerificationKey2019",
@@ -39,9 +39,9 @@ func testDoc() *DIDDoc {
 			CapabilityInvocation: []string{"#sig_44a9661f"},
 			KeyAgreement:         []string{"#sig_44a9661f"},
 		},
-		Metadata: DIDMetadata{
+		Metadata: Metadata{
 			CanonicalId: "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
-			Method: DIDMetadataMethod{
+			Method: MetadataMethod{
 				Published:          true,
 				UpdateCommitment:   "EiAGj7alOM1_2pVQv_Phbw3928zlVWWvMYuLsvuDnSuImg",
 				RecoveryCommitment: "EiB_FKDwQpnzkrD9Rwvu9puF8WUYdOvO06lX1F0LoF7WKw",
@@ -50,7 +50,7 @@ func testDoc() *DIDDoc {
 	}
 }
 
-var TestKey = DIDKeyInfo{
+var TestKey = KeyInfo{
 	ID:         "#sig_xxxxxx",
 	Controller: "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
 	Type:       "EcdsaSecp256k1VerificationKey2019",
@@ -69,7 +69,7 @@ var TestKey = DIDKeyInfo{
 	},
 }
 
-var TestServie = DIDService{
+var TestServie = Service{
 	ID:   "#identityHub",
 	Type: "IdentityHub",
 	ServiceEndpoint: map[string]interface{}{
@@ -80,28 +80,28 @@ var TestServie = DIDService{
 func TestResetData(t *testing.T) {
 
 	doc := testDoc()
-	doc.DIDDocument.ResetData()
+	doc.Document.ResetData()
 
-	if len(doc.DIDDocument.Services) != 0 {
-		t.Errorf("Services length should be 0 got %d", len(doc.DIDDocument.Services))
+	if len(doc.Document.Services) != 0 {
+		t.Errorf("Services length should be 0 got %d", len(doc.Document.Services))
 	}
-	if len(doc.DIDDocument.Verification) != 0 {
-		t.Errorf("Verification length should be 0 got %d", len(doc.DIDDocument.Verification))
+	if len(doc.Document.Verification) != 0 {
+		t.Errorf("Verification length should be 0 got %d", len(doc.Document.Verification))
 	}
-	if len(doc.DIDDocument.Authentication) != 0 {
-		t.Errorf("Authentication length should be 0 got %d", len(doc.DIDDocument.Authentication))
+	if len(doc.Document.Authentication) != 0 {
+		t.Errorf("Authentication length should be 0 got %d", len(doc.Document.Authentication))
 	}
-	if len(doc.DIDDocument.Assertion) != 0 {
-		t.Errorf("Assertion length should be 0 got %d", len(doc.DIDDocument.Assertion))
+	if len(doc.Document.Assertion) != 0 {
+		t.Errorf("Assertion length should be 0 got %d", len(doc.Document.Assertion))
 	}
-	if len(doc.DIDDocument.CapabilityDelegation) != 0 {
-		t.Errorf("CapabilityDelegation length should be 0 got %d", len(doc.DIDDocument.CapabilityDelegation))
+	if len(doc.Document.CapabilityDelegation) != 0 {
+		t.Errorf("CapabilityDelegation length should be 0 got %d", len(doc.Document.CapabilityDelegation))
 	}
-	if len(doc.DIDDocument.CapabilityInvocation) != 0 {
-		t.Errorf("CapabilityInvocation length should be 0 got %d", len(doc.DIDDocument.CapabilityInvocation))
+	if len(doc.Document.CapabilityInvocation) != 0 {
+		t.Errorf("CapabilityInvocation length should be 0 got %d", len(doc.Document.CapabilityInvocation))
 	}
-	if len(doc.DIDDocument.KeyAgreement) != 0 {
-		t.Errorf("KeyAgreement length should be 0 got %d", len(doc.DIDDocument.KeyAgreement))
+	if len(doc.Document.KeyAgreement) != 0 {
+		t.Errorf("KeyAgreement length should be 0 got %d", len(doc.Document.KeyAgreement))
 	}
 }
 
@@ -109,18 +109,18 @@ func TestAddPublicKeys(t *testing.T) {
 
 	doc := testDoc()
 
-	if len(doc.DIDDocument.Verification) != 1 {
-		t.Errorf("Verification length should be 1 got %d", len(doc.DIDDocument.Verification))
+	if len(doc.Document.Verification) != 1 {
+		t.Errorf("Verification length should be 1 got %d", len(doc.Document.Verification))
 	}
 
-	doc.DIDDocument.AddPublicKeys([]DIDKeyInfo{TestKey})
+	doc.Document.AddPublicKeys([]KeyInfo{TestKey})
 
-	if len(doc.DIDDocument.Verification) != 2 {
-		t.Errorf("Verification length should be 2 got %d", len(doc.DIDDocument.Verification))
+	if len(doc.Document.Verification) != 2 {
+		t.Errorf("Verification length should be 2 got %d", len(doc.Document.Verification))
 	}
 
 	foundKey := false
-	for _, key := range doc.DIDDocument.Verification {
+	for _, key := range doc.Document.Verification {
 		if key.ID == "#sig_xxxxxx" {
 			foundKey = true
 			break
@@ -132,7 +132,7 @@ func TestAddPublicKeys(t *testing.T) {
 	}
 
 	foundAuth := false
-	for _, authentication := range doc.DIDDocument.Authentication {
+	for _, authentication := range doc.Document.Authentication {
 		if authentication == "#sig_xxxxxx" {
 			foundAuth = true
 			break
@@ -144,7 +144,7 @@ func TestAddPublicKeys(t *testing.T) {
 	}
 
 	foundAssertion := false
-	for _, assertion := range doc.DIDDocument.Assertion {
+	for _, assertion := range doc.Document.Assertion {
 		if assertion == "#sig_xxxxxx" {
 			foundAssertion = true
 			break
@@ -156,7 +156,7 @@ func TestAddPublicKeys(t *testing.T) {
 	}
 
 	foundCapabilityDelegation := false
-	for _, capabilityDelegation := range doc.DIDDocument.CapabilityDelegation {
+	for _, capabilityDelegation := range doc.Document.CapabilityDelegation {
 		if capabilityDelegation == "#sig_xxxxxx" {
 			foundCapabilityDelegation = true
 			break
@@ -168,7 +168,7 @@ func TestAddPublicKeys(t *testing.T) {
 	}
 
 	foundCapabilityInvocation := false
-	for _, capabilityInvocation := range doc.DIDDocument.CapabilityInvocation {
+	for _, capabilityInvocation := range doc.Document.CapabilityInvocation {
 		if capabilityInvocation == "#sig_xxxxxx" {
 			foundCapabilityInvocation = true
 			break
@@ -180,7 +180,7 @@ func TestAddPublicKeys(t *testing.T) {
 	}
 
 	foundKeyAgreement := false
-	for _, keyAgreement := range doc.DIDDocument.KeyAgreement {
+	for _, keyAgreement := range doc.Document.KeyAgreement {
 		if keyAgreement == "#sig_xxxxxx" {
 			foundKeyAgreement = true
 			break
@@ -194,10 +194,10 @@ func TestAddPublicKeys(t *testing.T) {
 
 func TestRemovePublicKeys(t *testing.T) {
 	doc := testDoc()
-	doc.DIDDocument.AddPublicKeys([]DIDKeyInfo{TestKey})
+	doc.Document.AddPublicKeys([]KeyInfo{TestKey})
 
 	foundKey := false
-	for _, key := range doc.DIDDocument.Verification {
+	for _, key := range doc.Document.Verification {
 		if key.ID == "#sig_xxxxxx" {
 			foundKey = true
 			break
@@ -208,16 +208,16 @@ func TestRemovePublicKeys(t *testing.T) {
 		t.Error("Key not found")
 	}
 
-	if err := doc.DIDDocument.RemovePublicKeys([]string{"#sig_aaaaaa"}); err == nil {
+	if err := doc.Document.RemovePublicKeys([]string{"#sig_aaaaaa"}); err == nil {
 		t.Error("RemovePublicKey should return error for a key that does not exist")
 	}
 
-	if err := doc.DIDDocument.RemovePublicKeys([]string{"#sig_xxxxxx"}); err != nil {
+	if err := doc.Document.RemovePublicKeys([]string{"#sig_xxxxxx"}); err != nil {
 		t.Errorf("Error removing key: %s", err)
 	}
 
 	foundKey = false
-	for _, key := range doc.DIDDocument.Verification {
+	for _, key := range doc.Document.Verification {
 		if key.ID == "#sig_xxxxxx" {
 			foundKey = true
 			break
@@ -232,11 +232,11 @@ func TestRemovePublicKeys(t *testing.T) {
 func TestAddServices(t *testing.T) {
 
 	doc := testDoc()
-	doc.DIDDocument.AddServices([]DIDService{TestServie})
+	doc.Document.AddServices([]Service{TestServie})
 
 	foundService := false
-	var testService DIDService
-	for _, service := range doc.DIDDocument.Services {
+	var testService Service
+	for _, service := range doc.Document.Services {
 		if service.ID == "#identityHub" {
 			testService = service
 			foundService = true
@@ -267,7 +267,7 @@ func TestRemoveService(t *testing.T) {
 	doc := testDoc()
 
 	foundService := false
-	for _, service := range doc.DIDDocument.Services {
+	for _, service := range doc.Document.Services {
 		if service.ID == "#linkeddomains" {
 			foundService = true
 			break
@@ -278,16 +278,16 @@ func TestRemoveService(t *testing.T) {
 		t.Error("Service not found")
 	}
 
-	if err := doc.DIDDocument.RemoveServices([]string{"linkeddomainsss"}); err == nil {
+	if err := doc.Document.RemoveServices([]string{"linkeddomainsss"}); err == nil {
 		t.Error("RemoveServices should return error for a service that does not exist")
 	}
 
-	if err := doc.DIDDocument.RemoveServices([]string{"linkeddomains"}); err != nil {
+	if err := doc.Document.RemoveServices([]string{"linkeddomains"}); err != nil {
 		t.Errorf("Error removing service: %s", err)
 	}
 
 	foundService = false
-	for _, service := range doc.DIDDocument.Services {
+	for _, service := range doc.Document.Services {
 		if service.ID == "#linkeddomains" {
 			foundService = true
 			break

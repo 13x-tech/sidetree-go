@@ -1,33 +1,81 @@
 package sidetree
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
-
-	mh "github.com/multiformats/go-multihash"
 )
 
-type Config interface {
-	Logger() Logger
-	Storage() Storage
-	Prefix() string
-}
+type SidetreeOption func(interface{})
 
-func New(conf Config) *SideTree {
-	return &SideTree{
-		conf: conf,
+func WithPrefix(prefix string) SidetreeOption {
+	return func(d interface{}) {
+		switch t := d.(type) {
+		case *SideTree:
+			t.prefix = prefix
+		case *OperationsProcessor:
+			t.prefix = prefix
+		}
 	}
 }
 
+func WithStorage(storage Storage) SidetreeOption {
+	return func(d interface{}) {
+
+		switch t := d.(type) {
+		case *SideTree:
+			t.store = storage
+		case *OperationsProcessor:
+			didStore, err := storage.DIDs()
+			if err != nil {
+				return
+			}
+
+			casStore, err := storage.CAS()
+			if err != nil {
+				return
+			}
+
+			indexStore, err := storage.Indexer()
+			if err != nil {
+				return
+			}
+			t.didStore = didStore
+			t.casStore = casStore
+			t.indexStore = indexStore
+		}
+
+	}
+}
+
+func WithLogger(log Logger) SidetreeOption {
+	return func(d interface{}) {
+		switch t := d.(type) {
+		case *SideTree:
+			t.log = log
+		case *OperationsProcessor:
+			t.log = log
+		}
+	}
+}
+
+func New(options ...SidetreeOption) *SideTree {
+	return &SideTree{}
+}
+
 type SideTree struct {
-	conf Config
+	prefix string
+	store  Storage
+	log    Logger
 }
 
 func (s *SideTree) ProcessOperations(ops []SideTreeOp) error {
 
 	for _, op := range ops {
-		processor, err := Processor(op, s.conf)
+		processor, err := Processor(
+			op,
+			WithPrefix(s.prefix),
+			WithStorage(s.store),
+			WithLogger(s.log),
+		)
 		if err != nil {
 			return fmt.Errorf("failed to create operations processor: %w", err)
 		}
@@ -38,36 +86,4 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp) error {
 	}
 
 	return nil
-}
-
-func checkReveal(reveal string, commitment string) bool {
-	rawReveal, err := base64.RawURLEncoding.DecodeString(reveal)
-	if err != nil {
-		return false
-	}
-
-	decoded, err := mh.Decode(rawReveal)
-	if err != nil {
-		return false
-	}
-
-	h256 := sha256.Sum256(decoded.Digest)
-	revealHashed, err := mh.Encode(h256[:], mh.SHA2_256)
-	if err != nil {
-		return false
-	}
-
-	b64 := base64.RawURLEncoding.EncodeToString(revealHashed)
-
-	return commitment == string(b64)
-}
-
-func hashReveal(data []byte) (string, error) {
-	hashedReveal := sha256.Sum256(data)
-	revealMH, err := mh.Encode(hashedReveal[:], mh.SHA2_256)
-	if err != nil {
-		return "", fmt.Errorf("failed to hash revieal: %w", err)
-	}
-
-	return base64.RawURLEncoding.EncodeToString(revealMH), nil
 }
