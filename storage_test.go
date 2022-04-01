@@ -25,7 +25,7 @@ func NewTestStorage() *TestStorage {
 			didOps:   map[string][]SideTreeOp{},
 		},
 		dids: &TestDIDsStorage{
-			dids:        map[string]*did.DIDDoc{},
+			dids:        map[string]*did.Doc{},
 			deactivated: map[string]struct{}{},
 			mu:          sync.Mutex{},
 		},
@@ -93,11 +93,11 @@ func (t *TestCASStorage) insertObject(id string, data []byte) error {
 type TestDIDsStorage struct {
 	Closer
 	mu          sync.Mutex
-	dids        map[string]*did.DIDDoc
+	dids        map[string]*did.Doc
 	deactivated map[string]struct{}
 }
 
-func (t *TestDIDsStorage) Put(doc *did.DIDDoc) error {
+func (t *TestDIDsStorage) Put(doc *did.Doc) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.dids[doc.DIDDocument.ID] = doc
@@ -118,7 +118,7 @@ func (t *TestDIDsStorage) Recover(id string) error {
 	return nil
 }
 
-func (t *TestDIDsStorage) Get(id string) (*did.DIDDoc, error) {
+func (t *TestDIDsStorage) Get(id string) (*did.Doc, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.deactivated[id]
@@ -338,9 +338,9 @@ func TestCAS(t *testing.T) {
 
 }
 
-func testDoc() *did.DIDDoc {
+func testDoc() *did.Doc {
 
-	return &did.DIDDoc{
+	return &did.Doc{
 		Context: "https://w3id.org/did-resolution/v1",
 		DIDDocument: &did.DIDDocData{
 			ID:    "EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",

@@ -4,9 +4,9 @@ import (
 	"testing"
 )
 
-func testDoc() *DIDDoc {
+func testDoc() *Doc {
 
-	return &DIDDoc{
+	return &Doc{
 		Context: "https://w3id.org/did-resolution/v1",
 		DIDDocument: &DIDDocData{
 			ID:    "EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",

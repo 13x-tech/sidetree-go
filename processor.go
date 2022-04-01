@@ -593,7 +593,7 @@ func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]d
 	return didServices, nil
 }
 
-func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.DIDDoc {
+func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.Doc {
 
 	var didContext []interface{}
 	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
@@ -602,7 +602,7 @@ func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *d
 	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.prefix, id)
 	didContext = append(didContext, contextBase)
 
-	return &did.DIDDoc{
+	return &did.Doc{
 		Context: "https://w3id.org/did-resolution/v1",
 		DIDDocument: &did.DIDDocData{
 			ID:      id,

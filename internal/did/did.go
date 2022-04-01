@@ -14,18 +14,18 @@ import (
 	mh "github.com/multiformats/go-multihash"
 )
 
-type DIDDoc struct {
-	Context     string      `json:"@context"`
-	DIDDocument *DIDDocData `json:"didDocument"`
-	Metadata    DIDMetadata `json:"didDocumentMetadata"`
+type Document struct {
+	Context  string        `json:"@context"`
+	Document *DocumentData `json:"didDocument"`
+	Metadata Metadata      `json:"didDocumentMetadata"`
 }
 
-type DIDDocData struct {
+type DocumentData struct {
 	ID                   string        `json:"-"`
 	DocID                string        `json:"id"`
 	Context              []interface{} `json:"@context"`
-	Services             []DIDService  `json:"service,omitempty"`
-	Verification         []DIDKeyInfo  `json:"verificationMethod,omitempty"`
+	Services             []Service     `json:"service,omitempty"`
+	Verification         []KeyInfo     `json:"verificationMethod,omitempty"`
 	Authentication       []string      `json:"authentication,omitempty"`
 	Assertion            []string      `json:"assertionMethod,omitempty"`
 	CapabilityDelegation []string      `json:"capabilityDelegation,omitempty"`
@@ -33,9 +33,9 @@ type DIDDocData struct {
 	KeyAgreement         []string      `json:"keyAgreement,omitempty"`
 }
 
-func (d *DIDDocData) ResetData() {
-	d.Services = []DIDService{}
-	d.Verification = []DIDKeyInfo{}
+func (d *DocumentData) ResetData() {
+	d.Services = []Service{}
+	d.Verification = []KeyInfo{}
 	d.Authentication = []string{}
 	d.Assertion = []string{}
 	d.CapabilityDelegation = []string{}
@@ -43,7 +43,7 @@ func (d *DIDDocData) ResetData() {
 	d.KeyAgreement = []string{}
 }
 
-func (d *DIDDocData) AddPublicKeys(publicKeys []DIDKeyInfo) {
+func (d *DocumentData) AddPublicKeys(publicKeys []KeyInfo) {
 	for _, pubKey := range publicKeys {
 		// Check for existing key by ID Error for entire statechange if key already exists
 		// TODO: Check spec if this is legit
@@ -74,7 +74,7 @@ func (d *DIDDocData) AddPublicKeys(publicKeys []DIDKeyInfo) {
 	}
 }
 
-func (d *DIDDocData) removePurpose(keyId string) {
+func (d *DocumentData) removePurpose(keyId string) {
 	for i, authKey := range d.Authentication {
 		if authKey == keyId {
 			d.Authentication = append(d.Authentication[:i], d.Authentication[i+1:]...)
@@ -107,7 +107,7 @@ func (d *DIDDocData) removePurpose(keyId string) {
 	}
 }
 
-func (d *DIDDocData) RemovePublicKeys(publicKeys []string) error {
+func (d *DocumentData) RemovePublicKeys(publicKeys []string) error {
 	modified := false
 	for _, key := range publicKeys {
 
@@ -130,7 +130,7 @@ func (d *DIDDocData) RemovePublicKeys(publicKeys []string) error {
 	return nil
 }
 
-func (d *DIDDocData) AddServices(services []DIDService) {
+func (d *DocumentData) AddServices(services []Service) {
 	for _, service := range services {
 		// Check for existing service by ID Error for entire statechange if service already exists
 		for i, svc := range d.Services {
@@ -143,7 +143,7 @@ func (d *DIDDocData) AddServices(services []DIDService) {
 	d.Services = append(d.Services, services...)
 }
 
-func (d *DIDDocData) RemoveServices(services []string) error {
+func (d *DocumentData) RemoveServices(services []string) error {
 	modified := false
 	for _, service := range services {
 		if service[0] != '#' {
@@ -164,7 +164,7 @@ func (d *DIDDocData) RemoveServices(services []string) error {
 	return nil
 }
 
-type DIDKeyInfo struct {
+type KeyInfo struct {
 	ID         string                 `json:"id"`
 	Controller string                 `json:"controller,omitempty"`
 	Type       string                 `json:"type"`
@@ -173,20 +173,20 @@ type DIDKeyInfo struct {
 	Purposes   []string               `json:"purposes,omitempty"`
 }
 
-type DIDService struct {
-	ID              string             `json:"id"`
-	Type            string             `json:"type"`
-	ServiceEndpoint DIDServiceEndpoint `json:"serviceEndpoint"`
+type Service struct {
+	ID              string          `json:"id"`
+	Type            string          `json:"type"`
+	ServiceEndpoint ServiceEndpoint `json:"serviceEndpoint"`
 }
 
-type DIDServiceEndpoint interface{}
+type ServiceEndpoint interface{}
 
-type DIDMetadata struct {
-	Method      DIDMetadataMethod `json:"method"`
-	CanonicalId string            `json:"canonicalId"`
+type Metadata struct {
+	Method      MetadataMethod `json:"method"`
+	CanonicalId string         `json:"canonicalId"`
 }
 
-type DIDMetadataMethod struct {
+type MetadataMethod struct {
 	Published          bool   `json:"published"`
 	RecoveryCommitment string `json:"recoveryCommitment"`
 	UpdateCommitment   string `json:"updateCommitment"`
@@ -220,31 +220,31 @@ func GenerateKeys(crv elliptic.Curve) (updateKey, recoveryKey jwk.Key, err error
 	return
 }
 
-type DIDOption func(*createDID) error
+type Option func(*craete) error
 
-func WithPrefix(prefix string) DIDOption {
-	return func(d *createDID) error {
+func WithPrefix(prefix string) Option {
+	return func(d *craete) error {
 		d.prefix = prefix
 		return nil
 	}
 }
 
-func WithUpdateKey(key jwk.Key) DIDOption {
-	return func(d *createDID) error {
+func WithUpdateKey(key jwk.Key) Option {
+	return func(d *craete) error {
 		d.updateKey = key
 		return nil
 	}
 }
 
-func WithRecoverKey(key jwk.Key) DIDOption {
-	return func(d *createDID) error {
+func WithRecoverKey(key jwk.Key) Option {
+	return func(d *craete) error {
 		d.recoveryKey = key
 		return nil
 	}
 }
 
-func WithGenerateKeys(crv elliptic.Curve) DIDOption {
-	return func(d *createDID) error {
+func WithGenerateKeys(crv elliptic.Curve) Option {
+	return func(d *craete) error {
 		updateKey, recoveryKey, err := GenerateKeys(crv)
 		if err != nil {
 			return err
@@ -255,23 +255,23 @@ func WithGenerateKeys(crv elliptic.Curve) DIDOption {
 	}
 }
 
-func WithServices(services ...DIDService) DIDOption {
-	return func(d *createDID) error {
+func WithServices(services ...Service) Option {
+	return func(d *craete) error {
 		d.addServices(services...)
 		return nil
 	}
 }
 
-func WithPubKeys(keys ...DIDKeyInfo) DIDOption {
-	return func(d *createDID) error {
+func WithPubKeys(keys ...KeyInfo) Option {
+	return func(d *craete) error {
 		d.addPublicKeys(keys...)
 		return nil
 	}
 }
 
 // Create a DID Identity with the given DID and options
-func CreateDID(options ...DIDOption) (*createDID, error) {
-	d := &createDID{}
+func Create(options ...Option) (*craete, error) {
+	d := &craete{}
 	for _, option := range options {
 		if err := option(d); err != nil {
 			return nil, err
@@ -293,7 +293,7 @@ func CreateDID(options ...DIDOption) (*createDID, error) {
 	return d, nil
 }
 
-type createDID struct {
+type craete struct {
 	delta      *Delta
 	suffixData *SuffixData
 
@@ -305,19 +305,19 @@ type createDID struct {
 	prefix      string
 	recoveryKey jwk.Key
 	updateKey   jwk.Key
-	pubKeys     []DIDKeyInfo
-	services    []DIDService
+	pubKeys     []KeyInfo
+	services    []Service
 }
 
-func (d *createDID) addPublicKeys(keys ...DIDKeyInfo) {
+func (d *craete) addPublicKeys(keys ...KeyInfo) {
 	d.pubKeys = append(d.pubKeys, keys...)
 }
 
-func (d *createDID) addServices(services ...DIDService) {
+func (d *craete) addServices(services ...Service) {
 	d.services = append(d.services, services...)
 }
 
-func (d *createDID) generate() error {
+func (d *craete) generate() error {
 	updateReveal, updateCommitment, err := generateReveal(d.updateKey)
 	if err != nil {
 		return fmt.Errorf("failed to generate update reveal: %w", err)
@@ -379,7 +379,7 @@ func generateReveal(key jwk.Key) (reveal, commitment string, err error) {
 	return
 }
 
-func (d *createDID) LongFormURI() (string, error) {
+func (d *craete) LongFormURI() (string, error) {
 
 	didSuffix, err := d.suffixData.URI()
 	if err != nil {
@@ -409,7 +409,7 @@ func (d *createDID) LongFormURI() (string, error) {
 	return fmt.Sprintf("did:%s:%s:%s", d.prefix, didSuffix, encodedSuffixData), nil
 }
 
-func (d *createDID) URI() (string, error) {
+func (d *craete) URI() (string, error) {
 	didSuffix, err := d.suffixData.URI()
 	if err != nil {
 		return "", fmt.Errorf("failed to create suffix: %w", err)
@@ -419,7 +419,7 @@ func (d *createDID) URI() (string, error) {
 
 }
 
-func createReplaceDelta(updateCommitment string, publicKeys []DIDKeyInfo, services []DIDService) (Delta, error) {
+func createReplaceDelta(updateCommitment string, publicKeys []KeyInfo, services []Service) (Delta, error) {
 
 	if len(publicKeys) == 0 && len(services) == 0 {
 		return Delta{}, fmt.Errorf("public keys or services must not be empty")
@@ -479,7 +479,7 @@ func underMaxSize(i interface{}, max int) (bool, error) {
 	}
 }
 
-func createPublicKeyMap(pubKeys []DIDKeyInfo) (interface{}, error) {
+func createPublicKeyMap(pubKeys []KeyInfo) (interface{}, error) {
 	keyData, err := json.Marshal(pubKeys)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal public key: %w", err)
@@ -498,7 +498,7 @@ func createPublicKeyMap(pubKeys []DIDKeyInfo) (interface{}, error) {
 	return keyMap, nil
 }
 
-func createServicesMap(services []DIDService) (interface{}, error) {
+func createServicesMap(services []Service) (interface{}, error) {
 	serviceData, err := json.Marshal(services)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal services: %w", err)
