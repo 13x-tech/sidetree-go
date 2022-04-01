@@ -1,4 +1,4 @@
-package sidetree
+package did
 
 import (
 	"testing"

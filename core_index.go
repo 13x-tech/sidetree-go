@@ -1,13 +1,9 @@
 package sidetree
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 
-	"github.com/gowebpki/jcs"
-	mh "github.com/multiformats/go-multihash"
+	"github.com/13x-tech/sidetree-go/internal/did"
 )
 
 type CoreIndexFile struct {
@@ -116,40 +112,10 @@ type CoreOperations struct {
 }
 
 type CreateOperation struct {
-	SuffixData SuffixData `json:"suffixData"`
+	SuffixData did.SuffixData `json:"suffixData"`
 }
 
 type Operation struct {
 	DIDSuffix   string `json:"didSuffix"`
 	RevealValue string `json:"revealValue"`
-}
-
-type SuffixData struct {
-	Type               string `json:"type,omitempty"`
-	DeltaHash          string `json:"deltaHash"`
-	RecoveryCommitment string `json:"recoveryCommitment"`
-	AnchorOrigin       string `json:"anchorOrigin,omitempty"`
-}
-
-func (s SuffixData) URI() (string, error) {
-	// Short Form DID URI
-	// https://identity.foundation/sidetree/spec/#short-form-did
-
-	bytes, err := json.Marshal(s)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal suffix data: %w", err)
-	}
-
-	jcsBytes, err := jcs.Transform(bytes)
-	if err != nil {
-		return "", fmt.Errorf("failed to transform bytes: %w", err)
-	}
-
-	h256 := sha256.Sum256(jcsBytes)
-	hash, err := mh.Encode(h256[:], mh.SHA2_256)
-	if err != nil {
-		return "", fmt.Errorf("failed to create hash: %w", err)
-	}
-	encoder := base64.RawURLEncoding
-	return encoder.EncodeToString(hash), nil
 }

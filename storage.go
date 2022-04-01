@@ -2,6 +2,8 @@ package sidetree
 
 import (
 	"io"
+
+	"github.com/13x-tech/sidetree-go/internal/did"
 )
 
 type CAS interface {
@@ -20,10 +22,10 @@ type Storage interface {
 
 type DIDs interface {
 	io.Closer
-	Put(doc *DIDDoc) error
+	Put(doc *did.DIDDoc) error
 	Deactivate(id string) error
 	Recover(id string) error
-	Get(id string) (*DIDDoc, error)
+	Get(id string) (*did.DIDDoc, error)
 	List() ([]string, error)
 }
 

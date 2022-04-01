@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+
+	"github.com/13x-tech/sidetree-go/internal/did"
 )
 
 func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, error) {
@@ -531,14 +533,14 @@ func (p *OperationsProcessor) updateDIDOperations(id string) error {
 	return nil
 }
 
-func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{}) ([]DIDKeyInfo, error) {
+func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{}) ([]did.DIDKeyInfo, error) {
 
 	keys, ok := patch["publicKeys"]
 	if !ok {
 		return nil, fmt.Errorf("publicKeys not found")
 	}
 
-	var publicKeys []DIDKeyInfo
+	var publicKeys []did.DIDKeyInfo
 	keyBytes, err := json.Marshal(keys)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal publicKeys: %w", err)
@@ -563,14 +565,14 @@ func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{
 	return publicKeys, nil
 }
 
-func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]DIDService, error) {
+func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]did.DIDService, error) {
 
 	services, ok := patch["services"]
 	if !ok {
 		return nil, fmt.Errorf("services not found")
 	}
 
-	var didServices []DIDService
+	var didServices []did.DIDService
 	serviceBytes, err := json.Marshal(services)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal services: %w", err)
@@ -591,7 +593,7 @@ func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]D
 	return didServices, nil
 }
 
-func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *DIDDoc {
+func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.DIDDoc {
 
 	var didContext []interface{}
 	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
@@ -600,16 +602,16 @@ func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *D
 	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.prefix, id)
 	didContext = append(didContext, contextBase)
 
-	return &DIDDoc{
+	return &did.DIDDoc{
 		Context: "https://w3id.org/did-resolution/v1",
-		DIDDocument: &DIDDocData{
+		DIDDocument: &did.DIDDocData{
 			ID:      id,
 			DocID:   fmt.Sprintf("did:%s:%s", d.prefix, id),
 			Context: didContext,
 		},
-		Metadata: DIDMetadata{
+		Metadata: did.DIDMetadata{
 			CanonicalId: fmt.Sprintf("did:%s:%s", d.prefix, id),
-			Method: DIDMetadataMethod{
+			Method: did.DIDMetadataMethod{
 				Published:          true,
 				RecoveryCommitment: recoveryCommitment,
 			},

@@ -1,6 +1,10 @@
 package sidetree
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/13x-tech/sidetree-go/internal/did"
+)
 
 type ProvisionalIndexFile struct {
 	ProvisionalProofURI string      `json:"provisionalProofFileUri"`
@@ -64,7 +68,7 @@ func (p *ProvisionalIndexFile) processRevealValues() error {
 			)
 			continue
 		}
-		if checkReveal(op.RevealValue, updateCommitment) {
+		if did.CheckReveal(op.RevealValue, updateCommitment) {
 			p.revealValues[op.DIDSuffix] = op.RevealValue
 		}
 	}

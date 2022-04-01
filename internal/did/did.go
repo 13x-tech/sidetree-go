@@ -1,15 +1,17 @@
-package sidetree
+package did
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/gowebpki/jcs"
 	"github.com/lestrrat-go/jwx/v2/jwk"
+	mh "github.com/multiformats/go-multihash"
 )
 
 type DIDDoc struct {
@@ -190,8 +192,8 @@ type DIDMetadataMethod struct {
 	UpdateCommitment   string `json:"updateCommitment"`
 }
 
-func GenerateKeys() (updateKey, recoveryKey jwk.Key, err error) {
-	updateECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
+func GenerateKeys(crv elliptic.Curve) (updateKey, recoveryKey jwk.Key, err error) {
+	updateECDSA, err := ecdsa.GenerateKey(crv, rand.Reader)
 	if err != nil {
 		err = fmt.Errorf("failed to generate update key: %w", err)
 		return
@@ -203,7 +205,7 @@ func GenerateKeys() (updateKey, recoveryKey jwk.Key, err error) {
 		return
 	}
 
-	recoveryECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
+	recoveryECDSA, err := ecdsa.GenerateKey(crv, rand.Reader)
 	if err != nil {
 		err = fmt.Errorf("failed to generate recovery key: %w", err)
 		return
@@ -218,25 +220,32 @@ func GenerateKeys() (updateKey, recoveryKey jwk.Key, err error) {
 	return
 }
 
-type DIDOption func(*DID) error
+type DIDOption func(*createDID) error
+
+func WithPrefix(prefix string) DIDOption {
+	return func(d *createDID) error {
+		d.prefix = prefix
+		return nil
+	}
+}
 
 func WithUpdateKey(key jwk.Key) DIDOption {
-	return func(d *DID) error {
+	return func(d *createDID) error {
 		d.updateKey = key
 		return nil
 	}
 }
 
 func WithRecoverKey(key jwk.Key) DIDOption {
-	return func(d *DID) error {
+	return func(d *createDID) error {
 		d.recoveryKey = key
 		return nil
 	}
 }
 
-func WithGenerateKeys() DIDOption {
-	return func(d *DID) error {
-		updateKey, recoveryKey, err := GenerateKeys()
+func WithGenerateKeys(crv elliptic.Curve) DIDOption {
+	return func(d *createDID) error {
+		updateKey, recoveryKey, err := GenerateKeys(crv)
 		if err != nil {
 			return err
 		}
@@ -247,67 +256,68 @@ func WithGenerateKeys() DIDOption {
 }
 
 func WithServices(services ...DIDService) DIDOption {
-	return func(d *DID) error {
-		return d.AddServices(services...)
+	return func(d *createDID) error {
+		d.addServices(services...)
+		return nil
 	}
 }
 
-func WithPubKeys(keys ...jwk.Key) DIDOption {
-	return func(d *DID) error {
-		return d.AddPublicKeys(keys...)
+func WithPubKeys(keys ...DIDKeyInfo) DIDOption {
+	return func(d *createDID) error {
+		d.addPublicKeys(keys...)
+		return nil
 	}
 }
 
-func NewDID(options ...DIDOption) (*DID, error) {
-	d := &DID{}
+// Create a DID Identity with the given DID and options
+func CreateDID(options ...DIDOption) (*createDID, error) {
+	d := &createDID{}
 	for _, option := range options {
 		if err := option(d); err != nil {
 			return nil, err
 		}
 	}
 
+	if d.prefix == "" {
+		d.prefix = "ion"
+	}
+
 	if d.updateKey == nil || d.recoveryKey == nil {
 		return nil, fmt.Errorf("update and recovery keys must be provided")
 	}
 
-	if err := d.generateReveals(); err != nil {
+	if err := d.generate(); err != nil {
 		return nil, err
 	}
+
 	return d, nil
 }
 
-type DID struct {
-	Delta      *Delta      `json:"delta"`
-	SuffixData *SuffixData `json:"suffixData"`
+type createDID struct {
+	delta      *Delta
+	suffixData *SuffixData
 
 	updateReveal       *string
 	updateCommitment   *string
 	recoveryReveal     *string
 	recoveryCommitment *string
 
+	prefix      string
 	recoveryKey jwk.Key
 	updateKey   jwk.Key
 	pubKeys     []DIDKeyInfo
 	services    []DIDService
 }
 
-func (d *DID) AddPublicKeys(keys ...jwk.Key) error {
-	for _, key := range keys {
-		didKey, err := joseKeyToDIDKeyInfo(key)
-		if err != nil {
-			return fmt.Errorf("failed to convert key to DIDKeyInfo: %w", err)
-		}
-		d.pubKeys = append(d.pubKeys, didKey)
-	}
-	return nil
+func (d *createDID) addPublicKeys(keys ...DIDKeyInfo) {
+	d.pubKeys = append(d.pubKeys, keys...)
 }
 
-func (d *DID) AddServices(services ...DIDService) error {
+func (d *createDID) addServices(services ...DIDService) {
 	d.services = append(d.services, services...)
-	return nil
 }
 
-func (d *DID) generateReveals() error {
+func (d *createDID) generate() error {
 	updateReveal, updateCommitment, err := generateReveal(d.updateKey)
 	if err != nil {
 		return fmt.Errorf("failed to generate update reveal: %w", err)
@@ -321,6 +331,25 @@ func (d *DID) generateReveals() error {
 	}
 	d.recoveryReveal = &recoveryReveal
 	d.recoveryCommitment = &recoveryCommitment
+
+	delta, err := createReplaceDelta(*d.updateCommitment, d.pubKeys, d.services)
+	if err != nil {
+		return fmt.Errorf("failed to create delta: %w", err)
+	}
+
+	d.delta = &delta
+
+	deltaHash, err := delta.Hash()
+	if err != nil {
+		return fmt.Errorf("failed to hash delta: %w", err)
+	}
+
+	suffixData := SuffixData{
+		DeltaHash:          deltaHash,
+		RecoveryCommitment: *d.recoveryCommitment,
+	}
+
+	d.suffixData = &suffixData
 
 	return nil
 }
@@ -337,7 +366,7 @@ func generateReveal(key jwk.Key) (reveal, commitment string, err error) {
 		return "", "", fmt.Errorf("failed to transform update key: %w", err)
 	}
 
-	reveal, err = hashReveal(updateKeyJSON)
+	reveal, err = HashReveal(updateKeyJSON)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to hash reveal: %w", err)
 	}
@@ -350,33 +379,22 @@ func generateReveal(key jwk.Key) (reveal, commitment string, err error) {
 	return
 }
 
-func (d *DID) LongFormURI() (string, error) {
+func (d *createDID) LongFormURI() (string, error) {
 
-	delta, err := createReplaceDelta(*d.updateCommitment, d.pubKeys, d.services)
-	if err != nil {
-		return "", fmt.Errorf("failed to create delta: %w", err)
-	}
-
-	d.Delta = &delta
-
-	deltaHash, err := delta.Hash()
-	if err != nil {
-		return "", fmt.Errorf("failed to hash delta: %w", err)
-	}
-
-	suffixData := SuffixData{
-		DeltaHash:          deltaHash,
-		RecoveryCommitment: *d.recoveryCommitment,
-	}
-
-	d.SuffixData = &suffixData
-
-	didSuffix, err := d.SuffixData.URI()
+	didSuffix, err := d.suffixData.URI()
 	if err != nil {
 		return "", fmt.Errorf("failed to create suffix: %w", err)
 	}
 
-	didData, err := json.Marshal(d)
+	marshalStruct := struct {
+		Delta      Delta      `json:"delta"`
+		SuffixData SuffixData `json:"suffixData"`
+	}{
+		Delta:      *d.delta,
+		SuffixData: *d.suffixData,
+	}
+
+	didData, err := json.Marshal(marshalStruct)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal DID: %w", err)
 	}
@@ -386,7 +404,216 @@ func (d *DID) LongFormURI() (string, error) {
 		return "", fmt.Errorf("failed to transform DID: %w", err)
 	}
 
-	b64Data := base64.RawURLEncoding.EncodeToString(jsonData)
+	encodedSuffixData := base64.RawURLEncoding.EncodeToString(jsonData)
 
-	return fmt.Sprintf("did:ion:%s:%s", didSuffix, b64Data), nil
+	return fmt.Sprintf("did:%s:%s:%s", d.prefix, didSuffix, encodedSuffixData), nil
+}
+
+func (d *createDID) URI() (string, error) {
+	didSuffix, err := d.suffixData.URI()
+	if err != nil {
+		return "", fmt.Errorf("failed to create suffix: %w", err)
+	}
+
+	return fmt.Sprintf("did:%s:%s", d.prefix, didSuffix), nil
+
+}
+
+func createReplaceDelta(updateCommitment string, publicKeys []DIDKeyInfo, services []DIDService) (Delta, error) {
+
+	if len(publicKeys) == 0 && len(services) == 0 {
+		return Delta{}, fmt.Errorf("public keys or services must not be empty")
+	}
+
+	document := map[string]interface{}{}
+	if len(publicKeys) > 0 {
+		pubKeyMap, err := createPublicKeyMap(publicKeys)
+		if err != nil {
+			return Delta{}, fmt.Errorf("failed to create public key map: %w", err)
+		}
+		document["publicKeys"] = pubKeyMap
+	}
+
+	if len(services) > 0 {
+		serviceMap, err := createServicesMap(services)
+		if err != nil {
+			return Delta{}, fmt.Errorf("failed to create services map: %w", err)
+		}
+		document["services"] = serviceMap
+	}
+
+	patch := map[string]interface{}{
+		"action":   "replace",
+		"document": document,
+	}
+
+	d := Delta{
+		UpdateCommitment: updateCommitment,
+		Patches:          []map[string]interface{}{patch},
+	}
+
+	if b, err := underMaxSize(d, 1000); !b {
+		return Delta{}, fmt.Errorf("delta size exceeded: %w", err)
+	}
+
+	return d, nil
+}
+
+//TODO Implement size checks where needed
+// Delta, etc.
+func underMaxSize(i interface{}, max int) (bool, error) {
+	dataJSON, err := json.Marshal(i)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	jcsData, err := jcs.Transform(dataJSON)
+	if err != nil {
+		return false, fmt.Errorf("failed to transform data: %w", err)
+	}
+
+	if len(jcsData) < max {
+		return true, nil
+	} else {
+		return false, fmt.Errorf("data is too large (max: %d) got %d", max, len(jcsData))
+	}
+}
+
+func createPublicKeyMap(pubKeys []DIDKeyInfo) (interface{}, error) {
+	keyData, err := json.Marshal(pubKeys)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal public key: %w", err)
+	}
+
+	keyJSON, err := jcs.Transform(keyData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to transform public key: %w", err)
+	}
+
+	var keyMap interface{}
+
+	if err := json.Unmarshal(keyJSON, &keyMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal public key: %w", err)
+	}
+	return keyMap, nil
+}
+
+func createServicesMap(services []DIDService) (interface{}, error) {
+	serviceData, err := json.Marshal(services)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal services: %w", err)
+	}
+
+	serviceJSON, err := jcs.Transform(serviceData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to transform services: %w", err)
+	}
+
+	var serviceMap interface{}
+
+	if err := json.Unmarshal(serviceJSON, &serviceMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal services: %w", err)
+	}
+
+	return serviceMap, nil
+}
+
+func CheckReveal(reveal string, commitment string) bool {
+	rawReveal, err := base64.RawURLEncoding.DecodeString(reveal)
+	if err != nil {
+		return false
+	}
+
+	decoded, err := mh.Decode(rawReveal)
+	if err != nil {
+		return false
+	}
+
+	h256 := sha256.Sum256(decoded.Digest)
+	revealHashed, err := mh.Encode(h256[:], mh.SHA2_256)
+	if err != nil {
+		return false
+	}
+
+	b64 := base64.RawURLEncoding.EncodeToString(revealHashed)
+
+	return commitment == string(b64)
+}
+
+func HashReveal(data []byte) (string, error) {
+	hashedReveal := sha256.Sum256(data)
+	revealMH, err := mh.Encode(hashedReveal[:], mh.SHA2_256)
+	if err != nil {
+		return "", fmt.Errorf("failed to hash revieal: %w", err)
+	}
+
+	return base64.RawURLEncoding.EncodeToString(revealMH), nil
+}
+
+func hashCommitment(data []byte) (string, error) {
+	hashedReveal := sha256.Sum256(data)
+	hashedCommitment := sha256.Sum256(hashedReveal[:])
+
+	commitmentMH, err := mh.Encode(hashedCommitment[:], mh.SHA2_256)
+	if err != nil {
+		return "", fmt.Errorf("failed to hash commitment: %w", err)
+	}
+
+	return base64.RawURLEncoding.EncodeToString(commitmentMH), nil
+}
+
+type SuffixData struct {
+	Type               string `json:"type,omitempty"`
+	DeltaHash          string `json:"deltaHash"`
+	RecoveryCommitment string `json:"recoveryCommitment"`
+	AnchorOrigin       string `json:"anchorOrigin,omitempty"`
+}
+
+func (s SuffixData) URI() (string, error) {
+	// Short Form DID URI
+	// https://identity.foundation/sidetree/spec/#short-form-did
+
+	bytes, err := json.Marshal(s)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal suffix data: %w", err)
+	}
+
+	jcsBytes, err := jcs.Transform(bytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to transform bytes: %w", err)
+	}
+
+	h256 := sha256.Sum256(jcsBytes)
+	hash, err := mh.Encode(h256[:], mh.SHA2_256)
+	if err != nil {
+		return "", fmt.Errorf("failed to create hash: %w", err)
+	}
+	encoder := base64.RawURLEncoding
+	return encoder.EncodeToString(hash), nil
+}
+
+type Delta struct {
+	Patches          []map[string]interface{} `json:"patches"`
+	UpdateCommitment string                   `json:"updateCommitment"`
+}
+
+func (d *Delta) Hash() (string, error) {
+	deltaBytes, err := json.Marshal(d)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal delta for hashing: %w", err)
+	}
+
+	deltaJSON, err := jcs.Transform(deltaBytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to transform delta for hashing: %w", err)
+	}
+
+	shaDelta := sha256.Sum256(deltaJSON)
+	hashed, err := mh.Encode(shaDelta[:], mh.SHA2_256)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to multihash encode sha256: %w", err)
+	}
+
+	return base64.RawURLEncoding.EncodeToString(hashed), nil
 }
