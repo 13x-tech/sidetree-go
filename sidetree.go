@@ -57,14 +57,51 @@ func WithLogger(log Logger) SidetreeOption {
 	}
 }
 
+func WithFeeFunctions(feeFunctions ...interface{}) SidetreeOption {
+	return func(d interface{}) {
+		switch t := d.(type) {
+		case *SideTree:
+			for _, f := range feeFunctions {
+				switch fn := f.(type) {
+				case BaseFeeAlgorithm:
+					t.baseFeeFn = &fn
+				case PerOperationFee:
+					t.perOpFeeFn = &fn
+				case ValueLocking:
+					t.valueLockFn = &fn
+				}
+			}
+		case *OperationsProcessor:
+			for _, f := range feeFunctions {
+				switch fn := f.(type) {
+				case BaseFeeAlgorithm:
+					t.baseFeeFn = &fn
+				case PerOperationFee:
+					t.perOpFeeFn = &fn
+				case ValueLocking:
+					t.valueLockFn = &fn
+				}
+			}
+		}
+	}
+}
+
 func New(options ...SidetreeOption) *SideTree {
 	return &SideTree{}
 }
 
+//TODO have better defined variables that could fit multiple anchoring systems
+type BaseFeeAlgorithm func(opCount int, anchorPoint string) int
+type PerOperationFee func(baseFee int, opCount int, anchorPoint string) bool
+type ValueLocking func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool
+
 type SideTree struct {
-	prefix string
-	store  Storage
-	log    Logger
+	prefix      string
+	store       Storage
+	log         Logger
+	baseFeeFn   *BaseFeeAlgorithm
+	perOpFeeFn  *PerOperationFee
+	valueLockFn *ValueLocking
 }
 
 func (s *SideTree) ProcessOperations(ops []SideTreeOp) error {

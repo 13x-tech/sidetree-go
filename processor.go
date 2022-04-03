@@ -73,15 +73,44 @@ type OperationsProcessor struct {
 
 	deltaMappingArray []string
 	createdDelaHash   map[string]string
+
+	baseFeeFn   *BaseFeeAlgorithm
+	perOpFeeFn  *PerOperationFee
+	valueLockFn *ValueLocking
+
+	baseFee int
 }
 
 func (d *OperationsProcessor) Process() error {
+
 	if err := d.fetchCoreIndexFile(); err != nil {
 		return fmt.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
 	}
 
 	if d.CoreIndexFile == nil {
 		return fmt.Errorf("core index: %s - core index file is nil", d.CoreIndexFileURI)
+	}
+
+	// https://identity.foundation/sidetree/spec/#base-fee-variable
+	if d.baseFeeFn != nil {
+		baseFeeFn := *d.baseFeeFn
+		d.baseFee = baseFeeFn(d.op.Operations(), d.op.SystemAnchorPoint)
+	}
+
+	// https://identity.foundation/sidetree/spec/#per-operation-fee
+	if d.perOpFeeFn != nil {
+		perOpFeeFn := *d.perOpFeeFn
+		if !perOpFeeFn(d.baseFee, d.op.Operations(), d.op.SystemAnchorPoint) {
+			return fmt.Errorf("per op fee is not valid")
+		}
+	}
+
+	// https://identity.foundation/sidetree/spec/#value-locking
+	if d.valueLockFn != nil {
+		valueLockFn := *d.valueLockFn
+		if !valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, d.op.SystemAnchorPoint) {
+			return fmt.Errorf("value lock is not valid")
+		}
 	}
 
 	if err := d.CoreIndexFile.Process(); err != nil {
