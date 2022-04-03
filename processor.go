@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/internal/did"
+	"github.com/13x-tech/sidetree-go/pkg/did"
 )
 
 func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, error) {
@@ -84,11 +84,11 @@ type OperationsProcessor struct {
 func (d *OperationsProcessor) Process() error {
 
 	if err := d.fetchCoreIndexFile(); err != nil {
-		return fmt.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
+		return d.log.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
 	}
 
 	if d.CoreIndexFile == nil {
-		return fmt.Errorf("core index: %s - core index file is nil", d.CoreIndexFileURI)
+		return d.log.Errorf("core index: %s - core index file is nil", d.CoreIndexFileURI)
 	}
 
 	// https://identity.foundation/sidetree/spec/#base-fee-variable
@@ -101,7 +101,7 @@ func (d *OperationsProcessor) Process() error {
 	if d.perOpFeeFn != nil {
 		perOpFeeFn := *d.perOpFeeFn
 		if !perOpFeeFn(d.baseFee, d.op.Operations(), d.op.SystemAnchorPoint) {
-			return fmt.Errorf("per op fee is not valid")
+			return d.log.Errorf("per op fee is not valid")
 		}
 	}
 
@@ -109,69 +109,69 @@ func (d *OperationsProcessor) Process() error {
 	if d.valueLockFn != nil {
 		valueLockFn := *d.valueLockFn
 		if !valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, d.op.SystemAnchorPoint) {
-			return fmt.Errorf("value lock is not valid")
+			return d.log.Errorf("value lock is not valid")
 		}
 	}
 
 	if err := d.CoreIndexFile.Process(); err != nil {
-		return fmt.Errorf("core index: %s failed to process core index file: %w", d.CoreIndexFileURI, err)
+		return d.log.Errorf("core index: %s failed to process core index file: %w", d.CoreIndexFileURI, err)
 	}
 
 	if d.CoreProofFileURI != "" {
 
 		if err := d.fetchCoreProofFile(); err != nil {
-			return fmt.Errorf("core index: %s - failed to fetch core proof file: %w", d.CoreIndexFileURI, err)
+			return d.log.Errorf("core index: %s - failed to fetch core proof file: %w", d.CoreIndexFileURI, err)
 		}
 
 		if d.CoreProofFile == nil {
-			return fmt.Errorf("core index: %s - core proof file is nil", d.CoreIndexFileURI)
+			return d.log.Errorf("core index: %s - core proof file is nil", d.CoreIndexFileURI)
 		}
 
 		if err := d.CoreProofFile.Process(); err != nil {
-			return fmt.Errorf("core index: %s - failed to process core proof file: %w", d.CoreIndexFileURI, err)
+			return d.log.Errorf("core index: %s - failed to process core proof file: %w", d.CoreIndexFileURI, err)
 		}
 	}
 
 	if d.ProvisionalIndexFileURI != "" {
 
 		if err := d.fetchProvisionalIndexFile(); err != nil {
-			return fmt.Errorf("core index: %s - failed to fetch provisional index file: %w", d.CoreIndexFileURI, err)
+			return d.log.Errorf("core index: %s - failed to fetch provisional index file: %w", d.CoreIndexFileURI, err)
 		}
 
 		if d.ProvisionalIndexFile == nil {
-			return fmt.Errorf("core index: %s - provisional index file is nil", d.CoreIndexFileURI)
+			return d.log.Errorf("core index: %s - provisional index file is nil", d.CoreIndexFileURI)
 		}
 
 		if err := d.ProvisionalIndexFile.Process(); err != nil {
-			return fmt.Errorf("core index: %s - failed to process provisional index file: %w", d.CoreIndexFileURI, err)
+			return d.log.Errorf("core index: %s - failed to process provisional index file: %w", d.CoreIndexFileURI, err)
 		}
 
 		if len(d.ProvisionalIndexFile.Operations.Update) > 0 {
 
 			if err := d.fetchProvisionalProofFile(); err != nil {
-				return fmt.Errorf("core index: %s - failed to fetch provisional proof file: %w", d.CoreIndexFileURI, err)
+				return d.log.Errorf("core index: %s - failed to fetch provisional proof file: %w", d.CoreIndexFileURI, err)
 			}
 
 			if d.ProvisionalProofFile == nil {
-				return fmt.Errorf("core index: %s - provisional proof file is nil", d.CoreIndexFileURI)
+				return d.log.Errorf("core index: %s - provisional proof file is nil", d.CoreIndexFileURI)
 			}
 
 			if err := d.ProvisionalProofFile.Process(); err != nil {
-				return fmt.Errorf("core index: %s - failed to process provisional proof file: %w", d.CoreIndexFileURI, err)
+				return d.log.Errorf("core index: %s - failed to process provisional proof file: %w", d.CoreIndexFileURI, err)
 			}
 		}
 
 		if len(d.ProvisionalIndexFile.Chunks) > 0 {
 			if err := d.fetchChunkFile(); err != nil {
-				return fmt.Errorf("core index: %s - failed to fetch chunk file: %w", d.CoreIndexFileURI, err)
+				return d.log.Errorf("core index: %s - failed to fetch chunk file: %w", d.CoreIndexFileURI, err)
 			}
 
 			if d.ChunkFile == nil {
-				return fmt.Errorf("core index: %s - chunk file is nil", d.CoreIndexFileURI)
+				return d.log.Errorf("core index: %s - chunk file is nil", d.CoreIndexFileURI)
 			}
 
 			if err := d.ChunkFile.Process(); err != nil {
-				return fmt.Errorf("core index: %s - failed to process chunk file: %w", d.CoreIndexFileURI, err)
+				return d.log.Errorf("core index: %s - failed to process chunk file: %w", d.CoreIndexFileURI, err)
 			}
 		}
 	}
@@ -183,17 +183,17 @@ func (d *OperationsProcessor) Process() error {
 func (d *OperationsProcessor) fetchCoreIndexFile() error {
 
 	if d.CoreIndexFileURI == "" {
-		return fmt.Errorf("core index file URI is empty")
+		return d.log.Errorf("core index file URI is empty")
 	}
 
 	coreData, err := d.casStore.GetGZip(d.CoreIndexFileURI)
 	if err != nil {
-		return fmt.Errorf("failed to get core index file: %w", err)
+		return d.log.Errorf("failed to get core index file: %w", err)
 	}
 
 	var coreIndexFile CoreIndexFile
 	if err := json.Unmarshal(coreData, &coreIndexFile); err != nil {
-		return fmt.Errorf("failed to unmarshal core index file: %w", err)
+		return d.log.Errorf("failed to unmarshal core index file: %w", err)
 	}
 
 	coreIndexFile.processor = d
@@ -205,17 +205,17 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 func (d *OperationsProcessor) fetchCoreProofFile() error {
 
 	if d.CoreProofFileURI == "" {
-		return fmt.Errorf("core proof file URI is empty")
+		return d.log.Errorf("core proof file URI is empty")
 	}
 
 	coreProofData, err := d.casStore.GetGZip(d.CoreProofFileURI)
 	if err != nil {
-		return fmt.Errorf("failed to get core proof file: %w", err)
+		return d.log.Errorf("failed to get core proof file: %w", err)
 	}
 
 	var coreProofFile CoreProofFile
 	if err := json.Unmarshal(coreProofData, &coreProofFile); err != nil {
-		return fmt.Errorf("failed to unmarshal core proof file: %w", err)
+		return d.log.Errorf("failed to unmarshal core proof file: %w", err)
 	}
 
 	coreProofFile.processor = d
@@ -227,17 +227,17 @@ func (d *OperationsProcessor) fetchCoreProofFile() error {
 func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 
 	if d.ProvisionalIndexFileURI == "" {
-		return fmt.Errorf("no provisional index file URI")
+		return d.log.Errorf("no provisional index file URI")
 	}
 
 	provisionalData, err := d.casStore.GetGZip(d.ProvisionalIndexFileURI)
 	if err != nil {
-		return fmt.Errorf("failed to get provisional index file: %w", err)
+		return d.log.Errorf("failed to get provisional index file: %w", err)
 	}
 
 	var provisionalIndexFile ProvisionalIndexFile
 	if err := json.Unmarshal(provisionalData, &provisionalIndexFile); err != nil {
-		return fmt.Errorf("failed to unmarshal provisional index file: %w", err)
+		return d.log.Errorf("failed to unmarshal provisional index file: %w", err)
 	}
 
 	provisionalIndexFile.processor = d
@@ -249,17 +249,17 @@ func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 
 	if d.ProvisionalProofFileURI == "" {
-		return fmt.Errorf("no provisional proof file URI")
+		return d.log.Errorf("no provisional proof file URI")
 	}
 
 	provisionalProofData, err := d.casStore.GetGZip(d.ProvisionalProofFileURI)
 	if err != nil {
-		return fmt.Errorf("failed to get provisional proof file: %w", err)
+		return d.log.Errorf("failed to get provisional proof file: %w", err)
 	}
 
 	var provisionalProofFile ProvisionalProofFile
 	if err := json.Unmarshal(provisionalProofData, &provisionalProofFile); err != nil {
-		return fmt.Errorf("failed to unmarshal provisional proof file: %w", err)
+		return d.log.Errorf("failed to unmarshal provisional proof file: %w", err)
 	}
 
 	provisionalProofFile.processor = d
@@ -271,17 +271,17 @@ func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 func (d *OperationsProcessor) fetchChunkFile() error {
 
 	if d.ChunkFileURI == "" {
-		return fmt.Errorf("no chunk file URI")
+		return d.log.Errorf("no chunk file URI")
 	}
 
 	chunkData, err := d.casStore.GetGZip(d.ChunkFileURI)
 	if err != nil {
-		return fmt.Errorf("failed to get chunk file: %w", err)
+		return d.log.Errorf("failed to get chunk file: %w", err)
 	}
 
 	var chunkFile ChunkFile
 	if err := json.Unmarshal(chunkData, &chunkFile); err != nil {
-		return fmt.Errorf("failed to unmarshal chunk file: %w", err)
+		return d.log.Errorf("failed to unmarshal chunk file: %w", err)
 	}
 
 	chunkFile.processor = d
@@ -294,7 +294,7 @@ func (d *OperationsProcessor) createDID(id string, recoverCommitment string) err
 
 	didDoc := d.NewDIDDoc(id, recoverCommitment)
 	if err := d.didStore.Put(didDoc); err != nil {
-		return fmt.Errorf("failed to put did document: %w", err)
+		return d.log.Errorf("failed to put did document: %w", err)
 	}
 
 	return nil
@@ -303,41 +303,41 @@ func (d *OperationsProcessor) createDID(id string, recoverCommitment string) err
 func (d *OperationsProcessor) patchDelta(id string, patch map[string]interface{}) error {
 	action, ok := patch["action"]
 	if !ok {
-		return fmt.Errorf("%s patch does not have action: %s", id, patch)
+		return d.log.Errorf("%s patch does not have action: %s", id, patch)
 	}
 	switch action {
 	case "replace":
 		if err := d.replaceDocEntries(id, patch); err != nil {
-			return fmt.Errorf("failed to replace doc entries for %s: %w", id, err)
+			return d.log.Errorf("failed to replace doc entries for %s: %w", id, err)
 		}
 		return nil
 	case "add-public-keys":
 		if err := d.addPublicKeys(id, patch); err != nil {
-			return fmt.Errorf("failed to add public keys to %s: %w", id, err)
+			return d.log.Errorf("failed to add public keys to %s: %w", id, err)
 		}
 		return nil
 	case "remove-public-keys":
 		if err := d.removePublicKeys(id, patch); err != nil {
-			return fmt.Errorf("%s failed to remove public keys: %w", id, err)
+			return d.log.Errorf("%s failed to remove public keys: %w", id, err)
 		}
 		return nil
 	case "add-services":
 		if err := d.addServices(id, patch); err != nil {
-			return fmt.Errorf("%s failed to add services: %w", id, err)
+			return d.log.Errorf("%s failed to add services: %w", id, err)
 		}
 		return nil
 	case "remove-services":
 		if err := d.removeServices(id, patch); err != nil {
-			return fmt.Errorf("%s failed to remove services: %w", id, err)
+			return d.log.Errorf("%s failed to remove services: %w", id, err)
 		}
 		return nil
 	case "ietf-json-patch":
 		if err := d.ietfJSONPatch(id, patch); err != nil {
-			return fmt.Errorf("failed to ietf json patch %s: %w", id, err)
+			return d.log.Errorf("failed to ietf json patch %s: %w", id, err)
 		}
 		return nil
 	default:
-		return fmt.Errorf("%s unknown patch type: %s", id, patch)
+		return d.log.Errorf("%s unknown patch type: %s", id, patch)
 	}
 }
 
@@ -345,7 +345,7 @@ func (d *OperationsProcessor) replaceDocEntries(id string, patch map[string]inte
 
 	didDoc, err := d.didStore.Get(id)
 	if err != nil {
-		return fmt.Errorf("failed to get did document: %w", err)
+		return d.log.Errorf("failed to get did document: %w", err)
 	}
 
 	doc, ok := patch["document"].(map[string]interface{})
