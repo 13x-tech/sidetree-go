@@ -18,8 +18,11 @@ func WithPrefix(prefix string) SidetreeOption {
 }
 
 func WithStorage(storage Storage) SidetreeOption {
-	return func(d interface{}) {
+	if storage == nil {
+		panic("storage is nil")
+	}
 
+	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
 			t.store = storage
@@ -47,6 +50,10 @@ func WithStorage(storage Storage) SidetreeOption {
 }
 
 func WithLogger(log Logger) SidetreeOption {
+	if log == nil {
+		panic("log is nil")
+	}
+
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
@@ -87,7 +94,11 @@ func WithFeeFunctions(feeFunctions ...interface{}) SidetreeOption {
 }
 
 func New(options ...SidetreeOption) *SideTree {
-	return &SideTree{}
+	s := &SideTree{}
+	for _, option := range options {
+		option(s)
+	}
+	return s
 }
 
 //TODO have better defined variables that could fit multiple anchoring systems
