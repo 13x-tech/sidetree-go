@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/13x-tech/sidetree-go/internal/did"
+	"github.com/13x-tech/sidetree-go/pkg/did"
 )
 
 type Closer struct{}

@@ -3,7 +3,7 @@ package sidetree
 import (
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/internal/did"
+	"github.com/13x-tech/sidetree-go/pkg/did"
 )
 
 type ChunkFile struct {

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/internal/did"
+	"github.com/13x-tech/sidetree-go/pkg/did"
 	"github.com/gowebpki/jcs"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jws"

@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/internal/did"
+	"github.com/13x-tech/sidetree-go/pkg/did"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/gowebpki/jcs"
