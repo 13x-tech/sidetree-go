@@ -74,6 +74,8 @@ func (s *SignedUpdateDataOp) ValidateReveal(revealValue string) (bool, error) {
 		return false, fmt.Errorf("failed to unmarshal json web keys: %w", err)
 	}
 
+	fmt.Printf("\n\nKey Info -- Type: %s, Algorithm: %s, JSON: %s\n\n", key.KeyType(), key.Algorithm(), jsonKey)
+
 	verified, err := jws.Verify([]byte(s.SignedData), jws.WithKey(key.Algorithm(), key), jws.WithDetachedPayload(s.parsed.Payload()))
 	if err != nil {
 		return false, fmt.Errorf("failed to verify signature for key %s: %w", jsonKey, err)
