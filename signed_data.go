@@ -69,7 +69,7 @@ func (s *SignedUpdateDataOp) ValidateReveal(revealValue string) (bool, error) {
 		return false, fmt.Errorf("failed to validate reveal value: want %s got %s", revealValue, reveal)
 	}
 
-	key, err := jwk.FromRaw(jsonKey)
+	key, err := jwk.ParseKey(jsonKey)
 	if err != nil {
 		return false, fmt.Errorf("failed to unmarshal json web keys: %w", err)
 	}
@@ -161,7 +161,7 @@ func (s *SignedRecoverDataOp) ValidateReveal(revealValue string) (bool, error) {
 		return false, fmt.Errorf("failed to validate reveal value: want %s got %s", revealValue, reveal)
 	}
 
-	key, err := jwk.FromRaw(jsonKey)
+	key, err := jwk.ParseKey(jsonKey)
 	if err != nil {
 		return false, fmt.Errorf("failed to unmarshal json web keys: %w", err)
 	}
@@ -243,7 +243,7 @@ func (s *SignedDeactivateDataOp) ValidateReveal(revealValue string) (bool, error
 		return false, fmt.Errorf("failed to validate reveal value: want %s got %s", revealValue, reveal)
 	}
 
-	key, err := jwk.FromRaw(jsonKey)
+	key, err := jwk.ParseKey(jsonKey)
 	if err != nil {
 		return false, fmt.Errorf("failed to unmarshal json web keys: %w", err)
 	}
