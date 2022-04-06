@@ -1,16 +1,14 @@
 package did
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
+	"github.com/13x-tech/sidetree-go/internal/keys"
+
 	"github.com/gowebpki/jcs"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 	mh "github.com/multiformats/go-multihash"
 )
 
@@ -192,29 +190,15 @@ type MetadataMethod struct {
 	UpdateCommitment   string `json:"updateCommitment"`
 }
 
-func GenerateKeys(crv elliptic.Curve) (updateKey, recoveryKey jwk.Key, err error) {
-	updateECDSA, err := ecdsa.GenerateKey(crv, rand.Reader)
+func GenerateKeys() (updateKey, recoveryKey *keys.JSONWebKey, err error) {
+	updateKey, err = keys.GenerateES256K(nil)
 	if err != nil {
-		err = fmt.Errorf("failed to generate update key: %w", err)
-		return
+		return nil, nil, fmt.Errorf("failed to generate update key: %v", err)
 	}
 
-	updateKey, err = jwk.FromRaw(updateECDSA)
+	recoveryKey, err = keys.GenerateES256K(nil)
 	if err != nil {
-		err = fmt.Errorf("failed to transform update key: %w", err)
-		return
-	}
-
-	recoveryECDSA, err := ecdsa.GenerateKey(crv, rand.Reader)
-	if err != nil {
-		err = fmt.Errorf("failed to generate recovery key: %w", err)
-		return
-	}
-
-	recoveryKey, err = jwk.FromRaw(recoveryECDSA)
-	if err != nil {
-		err = fmt.Errorf("failed to transform recovery key: %w", err)
-		return
+		return nil, nil, fmt.Errorf("failed to generate recovery key: %v", err)
 	}
 
 	return
@@ -229,23 +213,23 @@ func WithPrefix(prefix string) Option {
 	}
 }
 
-func WithUpdateKey(key jwk.Key) Option {
+func WithUpdateKey(key *keys.JSONWebKey) Option {
 	return func(d *craete) error {
 		d.updateKey = key
 		return nil
 	}
 }
 
-func WithRecoverKey(key jwk.Key) Option {
+func WithRecoverKey(key *keys.JSONWebKey) Option {
 	return func(d *craete) error {
 		d.recoveryKey = key
 		return nil
 	}
 }
 
-func WithGenerateKeys(crv elliptic.Curve) Option {
+func WithGenerateKeys() Option {
 	return func(d *craete) error {
-		updateKey, recoveryKey, err := GenerateKeys(crv)
+		updateKey, recoveryKey, err := GenerateKeys()
 		if err != nil {
 			return err
 		}
@@ -303,8 +287,8 @@ type craete struct {
 	recoveryCommitment *string
 
 	prefix      string
-	recoveryKey jwk.Key
-	updateKey   jwk.Key
+	recoveryKey *keys.JSONWebKey
+	updateKey   *keys.JSONWebKey
 	pubKeys     []KeyInfo
 	services    []Service
 }
@@ -354,9 +338,9 @@ func (d *craete) generate() error {
 	return nil
 }
 
-func generateReveal(key jwk.Key) (reveal, commitment string, err error) {
+func generateReveal(key *keys.JSONWebKey) (reveal, commitment string, err error) {
 
-	updateKeyData, err := json.Marshal(key)
+	updateKeyData, err := key.MarshalJSON()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to marshal update key: %w", err)
 	}

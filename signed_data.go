@@ -5,16 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/13x-tech/sidetree-go/internal/keys"
 	"github.com/13x-tech/sidetree-go/pkg/did"
+
 	"github.com/gowebpki/jcs"
-	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/lestrrat-go/jwx/v2/jws"
 )
 
 type SignedUpdateDataOp struct {
 	SignedData string
 
-	parsed           *jws.Message
+	parsed           *keys.JSONWebSignature
 	protectedPayload *UpdateProtectedPayload
 }
 
@@ -31,7 +31,7 @@ func (s *SignedUpdateDataOp) DeltaHash() (string, error) {
 func (s *SignedUpdateDataOp) parse() error {
 	var err error
 
-	s.parsed, err = jws.Parse([]byte(s.SignedData))
+	s.parsed, err = keys.ParseSigned(s.SignedData)
 	if err != nil {
 		return fmt.Errorf("failed to parse signed data: %w", err)
 	}
@@ -69,14 +69,12 @@ func (s *SignedUpdateDataOp) ValidateReveal(revealValue string) (bool, error) {
 		return false, fmt.Errorf("failed to validate reveal value: want %s got %s", revealValue, reveal)
 	}
 
-	key, err := jwk.ParseKey(jsonKey)
+	key, err := keys.ParseKey(jsonKey)
 	if err != nil {
 		return false, fmt.Errorf("failed to unmarshal json web keys: %w", err)
 	}
 
-	fmt.Printf("\n\nKey Info -- Type: %s, Algorithm: %s, JSON: %s\n\n", key.KeyType(), key.Algorithm(), jsonKey)
-
-	verified, err := jws.Verify([]byte(s.SignedData), jws.WithKey(key.Algorithm(), key), jws.WithDetachedPayload(s.parsed.Payload()))
+	verified, err := s.parsed.Verify(key)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify signature for key %s: %w", jsonKey, err)
 	}
@@ -107,7 +105,7 @@ func (p *UpdateProtectedPayload) GetKeyData() ([]byte, error) {
 type SignedRecoverDataOp struct {
 	SignedData string
 
-	parsed           *jws.Message
+	parsed           *keys.JSONWebSignature
 	protectedPayload *RecoverProtectedPayload
 }
 
@@ -123,7 +121,7 @@ func (s *SignedRecoverDataOp) DeltaHash() (string, error) {
 
 func (s *SignedRecoverDataOp) parse() error {
 	var err error
-	s.parsed, err = jws.Parse([]byte(s.SignedData))
+	s.parsed, err = keys.ParseSigned(s.SignedData)
 	if err != nil {
 		return fmt.Errorf("failed to parse signed data: %w", err)
 	}
@@ -161,12 +159,12 @@ func (s *SignedRecoverDataOp) ValidateReveal(revealValue string) (bool, error) {
 		return false, fmt.Errorf("failed to validate reveal value: want %s got %s", revealValue, reveal)
 	}
 
-	key, err := jwk.ParseKey(jsonKey)
+	key, err := keys.ParseKey(jsonKey)
 	if err != nil {
 		return false, fmt.Errorf("failed to unmarshal json web keys: %w", err)
 	}
 
-	verified, err := jws.Verify([]byte(s.SignedData), jws.WithKey(key.Algorithm(), key), jws.WithDetachedPayload(s.parsed.Payload()))
+	verified, err := s.parsed.Verify(key)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify signature for key %s: %w", jsonKey, err)
 	}
@@ -199,13 +197,13 @@ func (p *RecoverProtectedPayload) GetKeyData() ([]byte, error) {
 type SignedDeactivateDataOp struct {
 	SignedData string
 
-	parsed           *jws.Message
+	parsed           *keys.JSONWebSignature
 	protectedPayload *DeactivateProtectedPayload
 }
 
 func (s *SignedDeactivateDataOp) parse() error {
 	var err error
-	s.parsed, err = jws.Parse([]byte(s.SignedData))
+	s.parsed, err = keys.ParseSigned(s.SignedData)
 	if err != nil {
 		return fmt.Errorf("failed to parse signed data: %w", err)
 	}
@@ -243,12 +241,12 @@ func (s *SignedDeactivateDataOp) ValidateReveal(revealValue string) (bool, error
 		return false, fmt.Errorf("failed to validate reveal value: want %s got %s", revealValue, reveal)
 	}
 
-	key, err := jwk.ParseKey(jsonKey)
+	key, err := keys.ParseKey(jsonKey)
 	if err != nil {
 		return false, fmt.Errorf("failed to unmarshal json web keys: %w", err)
 	}
 
-	verified, err := jws.Verify([]byte(s.SignedData), jws.WithKey(key.Algorithm(), key), jws.WithDetachedPayload(s.parsed.Payload()))
+	verified, err := s.parsed.Verify(key)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify signature for key %s: %w", jsonKey, err)
 	}
