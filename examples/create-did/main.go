@@ -1,46 +1,29 @@
 package main
 
 import (
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 
+	"github.com/13x-tech/sidetree-go/internal/keys"
 	"github.com/13x-tech/sidetree-go/pkg/did"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/gowebpki/jcs"
-	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
-func genKey(crv elliptic.Curve, purposes []string) (did.KeyInfo, error) {
-	key, err := ecdsa.GenerateKey(crv, rand.Reader)
+func genKey(purposes []string) (did.KeyInfo, error) {
+	key, err := keys.GenerateES256K([]byte("testing shitty entropy"))
 	if err != nil {
-		panic(err)
+		return did.KeyInfo{}, fmt.Errorf("failed to generate key: %w", err)
 	}
 
-	keyInfo, err := jwk.FromRaw(key)
-	if err != nil {
-		panic(err)
-	}
-
-	return JWKtoDIDKey(keyInfo, purposes)
+	return JWKtoDIDKey(key, purposes)
 }
 
 //This is temporary
 func main() {
 	fmt.Println("Generating Test Identity...")
 
-	crv := secp256k1.S256()
-
-	key1, err := genKey(crv, []string{"authentication"})
-	if err != nil {
-		panic(err)
-	}
-	key2, err := genKey(elliptic.P256(), []string{"authentication", "assertionMethod", "capabilityDelegation", "capabilityInvocation", "keyAgreement"})
+	key1, err := genKey([]string{"authentication", "assertionMethod", "capabilityDelegation", "capabilityInvocation", "keyAgreement"})
 	if err != nil {
 		panic(err)
 	}
@@ -63,8 +46,8 @@ func main() {
 	}
 
 	did, err := did.Create(
-		did.WithGenerateKeys(crv),
-		did.WithPubKeys(key1, key2),
+		did.WithGenerateKeys(),
+		did.WithPubKeys(key1),
 		did.WithServices(services...),
 	)
 
@@ -87,22 +70,14 @@ func main() {
 
 }
 
-func JWKtoDIDKey(key jwk.Key, purposes []string) (did.KeyInfo, error) {
+func JWKtoDIDKey(key *keys.JSONWebKey, purposes []string) (did.KeyInfo, error) {
 
 	didKey := did.KeyInfo{}
 
-	fingerPrint, err := key.Thumbprint(crypto.SHA256)
-	if err != nil {
-		return didKey, fmt.Errorf("failed to get key id: %w", err)
-	}
+	didKey.ID = key.KeyID()
+	didKey.Type = key.KeyType().String()
 
-	didKey.ID = fmt.Sprintf("sig_%x", fingerPrint[len(fingerPrint)-4:])
-	didKey.Type, err = keyType(key)
-	if err != nil {
-		return did.KeyInfo{}, fmt.Errorf("failed to get key type: %w", err)
-	}
-
-	keyData, err := json.Marshal(key)
+	keyData, err := key.MarshalJSON()
 	if err != nil {
 		return did.KeyInfo{}, fmt.Errorf("failed to marshal key: %w", err)
 	}
@@ -121,24 +96,4 @@ func JWKtoDIDKey(key jwk.Key, purposes []string) (did.KeyInfo, error) {
 	didKey.Purposes = purposes
 
 	return didKey, nil
-}
-
-//TODO: this is wrong
-func keyType(key jwk.Key) (string, error) {
-	switch key.Algorithm() {
-	case jwa.ES256K:
-		return "EcdsaSecp256k1VerificationKey2019", nil
-	case jwa.Ed25519:
-		return "Ed25519VerificationKey2018", nil
-	case jwa.RSA, jwa.RSA1_5, jwa.RSA_OAEP, jwa.RSA_OAEP_256:
-		return "RsaVerificationKey2018", nil
-	case jwa.X25519:
-		return "X25519KeyAgreementKey2019", nil
-	default:
-		return "JsonWebKey2020", nil
-		// return "Bls12381G2Key2020", nil
-		// return "Bls12381G1Key2020", nil
-		// return "SchnorrSecp256k1VerificationKey2019", nil
-		// return "PgpVerificationKey2021", nil
-	}
 }
