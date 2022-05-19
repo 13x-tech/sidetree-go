@@ -5,12 +5,38 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/13x-tech/sidetree-go/internal/keys"
 
 	"github.com/gowebpki/jcs"
 	mh "github.com/multiformats/go-multihash"
 )
+
+func New(id, recoveryCommitment, prefix string, published bool) *Document {
+	var didContext []interface{}
+	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
+
+	contextBase := map[string]interface{}{}
+	contextBase["@base"] = fmt.Sprintf("did:%s:%s", prefix, id)
+	didContext = append(didContext, contextBase)
+
+	return &Document{
+		Context: "https://w3id.org/did-resolution/v1",
+		Document: &DocumentData{
+			ID:      id,
+			DocID:   fmt.Sprintf("did:%s:%s", prefix, id),
+			Context: didContext,
+		},
+		Metadata: Metadata{
+			CanonicalId: fmt.Sprintf("did:%s:%s", prefix, id),
+			Method: MetadataMethod{
+				Published:          published,
+				RecoveryCommitment: recoveryCommitment,
+			},
+		},
+	}
+}
 
 type Document struct {
 	Context  string        `json:"@context"`
@@ -275,6 +301,45 @@ func Create(options ...Option) (*craete, error) {
 	}
 
 	return d, nil
+}
+
+func ParseDID(did string) (*Document, error) {
+	parts := strings.Split(did, ":")
+	if len(parts) < 4 {
+		return nil, fmt.Errorf("invalid did: %s", did)
+	}
+
+	if parts[0] != "did" {
+		return nil, fmt.Errorf("invalid did: %s", did)
+	}
+
+	method := parts[1]
+	if method != "ion" {
+		return nil, fmt.Errorf("invalid did - only ion method currently supported: %s", did)
+	}
+
+	id := parts[2]
+	longForm := parts[3]
+
+	longFormData, err := base64.RawURLEncoding.DecodeString(longForm)
+	if err != nil {
+		return nil, fmt.Errorf("invalid did - invalid long form: %s", did)
+	}
+
+	var docInfo struct {
+		Delta      Delta      `json:"delta"`
+		SuffixData SuffixData `json:"suffixData"`
+	}
+
+	if err := json.Unmarshal(longFormData, &docInfo); err != nil {
+		return nil, fmt.Errorf("invalid did - invalid long form: %s", did)
+	}
+
+	recoverCommitment := docInfo.SuffixData.RecoveryCommitment
+
+	doc := New(id, recoverCommitment, method, false)
+
+	return doc, nil
 }
 
 type craete struct {

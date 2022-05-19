@@ -623,27 +623,5 @@ func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]d
 }
 
 func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.Document {
-
-	var didContext []interface{}
-	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
-
-	contextBase := map[string]interface{}{}
-	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.prefix, id)
-	didContext = append(didContext, contextBase)
-
-	return &did.Document{
-		Context: "https://w3id.org/did-resolution/v1",
-		Document: &did.DocumentData{
-			ID:      id,
-			DocID:   fmt.Sprintf("did:%s:%s", d.prefix, id),
-			Context: didContext,
-		},
-		Metadata: did.Metadata{
-			CanonicalId: fmt.Sprintf("did:%s:%s", d.prefix, id),
-			Method: did.MetadataMethod{
-				Published:          true,
-				RecoveryCommitment: recoveryCommitment,
-			},
-		},
-	}
+	return did.New(id, recoveryCommitment, d.prefix, true)
 }
