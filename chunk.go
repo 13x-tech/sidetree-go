@@ -115,5 +115,9 @@ func (c *ChunkFile) processDelta(index int, delta did.Delta) error {
 		return fmt.Errorf("failed to patch data for %s: %w", id, err)
 	}
 
+	if err := c.processor.didStore.Put(doc); err != nil {
+		return fmt.Errorf("failed to put document for %s: %w", id, err)
+	}
+
 	return nil
 }
