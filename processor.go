@@ -1,7 +1,6 @@
 package sidetree
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -389,66 +388,6 @@ func (p *OperationsProcessor) updateDIDOperations(id string) error {
 	}
 
 	return nil
-}
-
-func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{}) ([]did.KeyInfo, error) {
-
-	keys, ok := patch["publicKeys"]
-	if !ok {
-		return nil, fmt.Errorf("publicKeys not found")
-	}
-
-	var publicKeys []did.KeyInfo
-	keyBytes, err := json.Marshal(keys)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal publicKeys: %w", err)
-	}
-
-	if err := json.Unmarshal(keyBytes, &publicKeys); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal publicKeys: %w", err)
-	}
-
-	for i, key := range publicKeys {
-		if len(base64.RawURLEncoding.EncodeToString([]byte(key.ID))) > 50 {
-			return nil, fmt.Errorf("public key id %s is too long", key.ID)
-		}
-
-		key.ID = fmt.Sprintf("#%s", key.ID)
-		if key.Controller == "" {
-			key.Controller = fmt.Sprintf("did:%s:%s", p.prefix, id)
-		}
-		publicKeys[i] = key
-	}
-
-	return publicKeys, nil
-}
-
-func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]did.Service, error) {
-
-	services, ok := patch["services"]
-	if !ok {
-		return nil, fmt.Errorf("services not found")
-	}
-
-	var didServices []did.Service
-	serviceBytes, err := json.Marshal(services)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal services: %w", err)
-	}
-	if err := json.Unmarshal(serviceBytes, &didServices); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal services: %w", err)
-	}
-
-	for i, service := range didServices {
-		if len(base64.URLEncoding.EncodeToString([]byte(service.ID))) > 50 {
-			return nil, fmt.Errorf("service id %s is too long", service.ID)
-		}
-
-		service.ID = fmt.Sprintf("#%s", service.ID)
-		didServices[i] = service
-	}
-
-	return didServices, nil
 }
 
 func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.Document {

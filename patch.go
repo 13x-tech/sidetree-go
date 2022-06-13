@@ -169,20 +169,6 @@ func (p *Patch) ietfJSONPatch(id string, patch map[string]interface{}) error {
 	return nil
 }
 
-func (p *Patch) setUpdateCommitment(id string, commitment string) error {
-	p.doc.Metadata.Method.UpdateCommitment = commitment
-	return nil
-}
-
-func (p *Patch) getUpdateCommitment(id string) (string, error) {
-
-	if p.doc.Metadata.Method.UpdateCommitment == "" {
-		return "", fmt.Errorf("no update commitment for %s", id)
-	}
-
-	return p.doc.Metadata.Method.UpdateCommitment, nil
-}
-
 func (p *Patch) processKeys(id string, patch map[string]interface{}) ([]did.KeyInfo, error) {
 
 	keys, ok := patch["publicKeys"]
