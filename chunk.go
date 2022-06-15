@@ -1,10 +1,20 @@
 package sidetree
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/13x-tech/sidetree-go/pkg/did"
 )
+
+func NewChunkFile(processor *OperationsProcessor, data []byte) (*ChunkFile, error) {
+	var c ChunkFile
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal chunk: %w", err)
+	}
+	c.processor = processor
+	return &c, nil
+}
 
 type ChunkFile struct {
 	Deltas []did.Delta `json:"deltas"`

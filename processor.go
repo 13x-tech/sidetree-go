@@ -1,7 +1,6 @@
 package sidetree
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/13x-tech/sidetree-go/pkg/did"
@@ -266,13 +265,10 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 		return d.log.Errorf("failed to get chunk file: %w", err)
 	}
 
-	var chunkFile ChunkFile
-	if err := json.Unmarshal(chunkData, &chunkFile); err != nil {
-		return d.log.Errorf("failed to unmarshal chunk file: %w", err)
+	d.ChunkFile, err = NewChunkFile(d, chunkData)
+	if err != nil {
+		return d.log.Errorf("failed to create chunk file: %w", err)
 	}
-
-	chunkFile.processor = d
-	d.ChunkFile = &chunkFile
 
 	return nil
 }

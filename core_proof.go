@@ -6,13 +6,13 @@ import (
 )
 
 func NewCoreProofFile(processor *OperationsProcessor, data []byte) (*CoreProofFile, error) {
-	var coreProofFile CoreProofFile
-	if err := json.Unmarshal(data, &coreProofFile); err != nil {
+	var c CoreProofFile
+	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal core proof file: %w", err)
 	}
-	coreProofFile.processor = processor
+	c.processor = processor
 
-	return &coreProofFile, nil
+	return &c, nil
 }
 
 type CoreProofFile struct {
