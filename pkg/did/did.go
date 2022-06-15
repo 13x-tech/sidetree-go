@@ -303,45 +303,6 @@ func Create(options ...Option) (*craete, error) {
 	return d, nil
 }
 
-func ParseDID(did string) (*Document, error) {
-	parts := strings.Split(did, ":")
-	if len(parts) < 4 {
-		return nil, fmt.Errorf("invalid did: %s", did)
-	}
-
-	if parts[0] != "did" {
-		return nil, fmt.Errorf("invalid did: %s", did)
-	}
-
-	method := parts[1]
-	if method != "ion" {
-		return nil, fmt.Errorf("invalid did - only ion method currently supported: %s", did)
-	}
-
-	id := parts[2]
-	longForm := parts[3]
-
-	longFormData, err := base64.RawURLEncoding.DecodeString(longForm)
-	if err != nil {
-		return nil, fmt.Errorf("invalid did - invalid long form: %s", did)
-	}
-
-	var docInfo struct {
-		Delta      Delta      `json:"delta"`
-		SuffixData SuffixData `json:"suffixData"`
-	}
-
-	if err := json.Unmarshal(longFormData, &docInfo); err != nil {
-		return nil, fmt.Errorf("invalid did - invalid long form: %s", did)
-	}
-
-	recoverCommitment := docInfo.SuffixData.RecoveryCommitment
-
-	doc := New(id, recoverCommitment, method, false)
-
-	return doc, nil
-}
-
 type craete struct {
 	delta      *Delta
 	suffixData *SuffixData
@@ -665,4 +626,41 @@ func (d *Delta) Hash() (string, error) {
 	}
 
 	return base64.RawURLEncoding.EncodeToString(hashed), nil
+}
+
+func ParseLongForm(uri string) (SuffixData, Delta, error) {
+	splitURI := strings.Split(uri, ":")
+	if len(splitURI) < 2 {
+		return SuffixData{}, Delta{}, fmt.Errorf("invalid long form uri: %s", uri)
+	}
+
+	splitLength := len(splitURI)
+
+	didSuffix := splitURI[splitLength-2]
+	longFormData := splitURI[splitLength-1]
+
+	longFormDataBytes, err := base64.RawURLEncoding.DecodeString(longFormData)
+	if err != nil {
+		return SuffixData{}, Delta{}, fmt.Errorf("failed to base64 decode suffix data: %w", err)
+	}
+
+	var longFormDataStruct struct {
+		SuffixData SuffixData `json:"suffixData"`
+		Delta      Delta      `json:"delta"`
+	}
+
+	if err := json.Unmarshal(longFormDataBytes, &longFormDataStruct); err != nil {
+		return SuffixData{}, Delta{}, fmt.Errorf("failed to unmarshal suffix data: %w", err)
+	}
+
+	testSuffix, err := longFormDataStruct.SuffixData.URI()
+	if err != nil {
+		return SuffixData{}, Delta{}, fmt.Errorf("failed to create suffix uri: %w", err)
+	}
+
+	if testSuffix != didSuffix {
+		return SuffixData{}, Delta{}, fmt.Errorf("suffix uri does not match: %s != %s", testSuffix, didSuffix)
+	}
+
+	return longFormDataStruct.SuffixData, longFormDataStruct.Delta, nil
 }

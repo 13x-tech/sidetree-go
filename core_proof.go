@@ -1,6 +1,19 @@
 package sidetree
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func NewCoreProofFile(processor *OperationsProcessor, data []byte) (*CoreProofFile, error) {
+	var coreProofFile CoreProofFile
+	if err := json.Unmarshal(data, &coreProofFile); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal core proof file: %w", err)
+	}
+	coreProofFile.processor = processor
+
+	return &coreProofFile, nil
+}
 
 type CoreProofFile struct {
 	Operations CoreProofOperations `json:"operations"`

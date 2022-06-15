@@ -190,13 +190,10 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 		return d.log.Errorf("failed to get core index file: %w", err)
 	}
 
-	var coreIndexFile CoreIndexFile
-	if err := json.Unmarshal(coreData, &coreIndexFile); err != nil {
-		return d.log.Errorf("failed to unmarshal core index file: %w", err)
+	d.CoreIndexFile, err = NewCoreIndexFile(d, coreData)
+	if err != nil {
+		return d.log.Errorf("failed to create core index file: %w", err)
 	}
-
-	coreIndexFile.processor = d
-	d.CoreIndexFile = &coreIndexFile
 
 	return nil
 }
@@ -212,13 +209,10 @@ func (d *OperationsProcessor) fetchCoreProofFile() error {
 		return d.log.Errorf("failed to get core proof file: %w", err)
 	}
 
-	var coreProofFile CoreProofFile
-	if err := json.Unmarshal(coreProofData, &coreProofFile); err != nil {
-		return d.log.Errorf("failed to unmarshal core proof file: %w", err)
+	d.CoreProofFile, err = NewCoreProofFile(d, coreProofData)
+	if err != nil {
+		return d.log.Errorf("failed to create core proof file: %w", err)
 	}
-
-	coreProofFile.processor = d
-	d.CoreProofFile = &coreProofFile
 
 	return nil
 }
@@ -234,13 +228,10 @@ func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 		return d.log.Errorf("failed to get provisional index file: %w", err)
 	}
 
-	var provisionalIndexFile ProvisionalIndexFile
-	if err := json.Unmarshal(provisionalData, &provisionalIndexFile); err != nil {
-		return d.log.Errorf("failed to unmarshal provisional index file: %w", err)
+	d.ProvisionalIndexFile, err = NewProvisionalIndexFile(d, provisionalData)
+	if err != nil {
+		return d.log.Errorf("failed to create provisional index file: %w", err)
 	}
-
-	provisionalIndexFile.processor = d
-	d.ProvisionalIndexFile = &provisionalIndexFile
 
 	return nil
 }
@@ -256,13 +247,10 @@ func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 		return d.log.Errorf("failed to get provisional proof file: %w", err)
 	}
 
-	var provisionalProofFile ProvisionalProofFile
-	if err := json.Unmarshal(provisionalProofData, &provisionalProofFile); err != nil {
-		return d.log.Errorf("failed to unmarshal provisional proof file: %w", err)
+	d.ProvisionalProofFile, err = NewProvisionalProofFile(d, provisionalProofData)
+	if err != nil {
+		return d.log.Errorf("failed to create provisional proof file: %w", err)
 	}
-
-	provisionalProofFile.processor = d
-	d.ProvisionalProofFile = &provisionalProofFile
 
 	return nil
 }
