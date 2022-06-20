@@ -229,30 +229,30 @@ func TestIndexeOps(t *testing.T) {
 	}
 }
 
-func TestDIDOps(t *testing.T) {
-	storage := NewTestStorage()
-	indexer, err := storage.Indexer()
-	if err != nil {
-		t.Errorf("Error creating Indexer: %v", err)
-	}
-	if indexer == nil {
-		t.Error("Indexer is nil")
-	}
+// func TestDIDOps(t *testing.T) {
+// 	storage := NewTestStorage()
+// 	indexer, err := storage.Indexer()
+// 	if err != nil {
+// 		t.Errorf("Error creating Indexer: %v", err)
+// 	}
+// 	if indexer == nil {
+// 		t.Error("Indexer is nil")
+// 	}
 
-	if err := indexer.PutDIDOps("abc", storageTestOps); err != nil {
-		t.Errorf("Error putting ops: %v", err)
-	}
+// 	if err := indexer.PutDIDOps("abc", storageTestOps); err != nil {
+// 		t.Errorf("Error putting ops: %v", err)
+// 	}
 
-	ops, err := indexer.GetDIDOps("abc")
-	if err != nil {
-		t.Errorf("Error getting ops: %v", err)
-	}
+// 	ops, err := indexer.GetDIDOps("abc")
+// 	if err != nil {
+// 		t.Errorf("Error getting ops: %v", err)
+// 	}
 
-	if !reflect.DeepEqual(ops, storageTestOps) {
-		t.Errorf("Ops not equal: %v", ops)
-	}
+// 	if !reflect.DeepEqual(ops, storageTestOps) {
+// 		t.Errorf("Ops not equal: %v", ops)
+// 	}
 
-}
+// }
 
 func TestDIDs(t *testing.T) {
 	storage := NewTestStorage()

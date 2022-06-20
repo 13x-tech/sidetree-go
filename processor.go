@@ -329,50 +329,50 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 			return fmt.Errorf("failed to get uri from create operation: %w", err)
 		}
 
-		if err := p.updateDIDOperations(uri); err != nil {
-			return fmt.Errorf("failed to update did operations: %w", err)
-		}
+		// if err := p.updateDIDOperations(uri); err != nil {
+		// 	return fmt.Errorf("failed to update did operations: %w", err)
+		// }
 
 		p.createdDelaHash[uri] = op.SuffixData.DeltaHash
 		p.deltaMappingArray = append(p.deltaMappingArray, uri)
 	}
 
 	for _, op := range coreIndex.Operations.Recover {
-		if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
-			return fmt.Errorf("failed to update did operations: %w", err)
-		}
+		// if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
+		// 	return fmt.Errorf("failed to update did operations: %w", err)
+		// }
 
 		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
 	}
 
 	for _, op := range provisionalIndex.Operations.Update {
-		if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
-			return fmt.Errorf("failed to update did operations: %w", err)
-		}
+		// if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
+		// 	return fmt.Errorf("failed to update did operations: %w", err)
+		// }
 		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
 	}
 
 	return nil
 }
 
-func (p *OperationsProcessor) updateDIDOperations(id string) error {
+// func (p *OperationsProcessor) updateDIDOperations(id string) error {
 
-	var err error
-	var ops []SideTreeOp
-	ops, err = p.indexStore.GetDIDOps(id)
-	if err != nil {
-		return fmt.Errorf("failed to get did operations: %w", err)
-	}
+// 	var err error
+// 	var ops []SideTreeOp
+// 	ops, err = p.indexStore.GetDIDOps(id)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to get did operations: %w", err)
+// 	}
 
-	if !OpAlreadyExists(ops, p.op) {
-		ops = append(ops, p.op)
-		if err := p.indexStore.PutDIDOps(id, ops); err != nil {
-			return fmt.Errorf("failed to put did operations: %w", err)
-		}
-	}
+// 	if !OpAlreadyExists(ops, p.op) {
+// 		ops = append(ops, p.op)
+// 		if err := p.indexStore.PutDIDOps(id, ops); err != nil {
+// 			return fmt.Errorf("failed to put did operations: %w", err)
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.Document {
 	return did.New(id, recoveryCommitment, d.prefix, true)

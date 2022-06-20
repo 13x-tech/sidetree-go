@@ -93,9 +93,9 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 			return fmt.Errorf("duplicate operation found in deactivate")
 		}
 
-		if err := c.processor.updateDIDOperations(op.DIDSuffix); err != nil {
-			return fmt.Errorf("failed to update did operations: %w", err)
-		}
+		// if err := c.processor.updateDIDOperations(op.DIDSuffix); err != nil {
+		// 	return fmt.Errorf("failed to update did operations: %w", err)
+		// }
 
 		c.suffixMap[op.DIDSuffix] = struct{}{}
 	}
