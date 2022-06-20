@@ -34,4 +34,5 @@ type Indexer interface {
 	io.Closer
 	PutOps(index int, ops []SideTreeOp) error
 	GetOps(index int) ([]SideTreeOp, error)
+	LastSynced() (int, error)
 }
