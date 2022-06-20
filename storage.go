@@ -26,7 +26,6 @@ type DIDs interface {
 	Deactivate(id string) error
 	Recover(id string) error
 	Get(id string) (*did.Document, error)
-	List() ([]string, error)
 }
 
 // TODO: Refactor this to be generalized amongst different anchoring systems
