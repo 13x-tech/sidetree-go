@@ -1,10 +1,23 @@
 package sidetree
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/13x-tech/sidetree-go/pkg/did"
 )
+
+func NewCoreIndexFile(processor *OperationsProcessor, data []byte) (*CoreIndexFile, error) {
+
+	c := CoreIndexFile{}
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal core index file: %w", err)
+	}
+
+	c.processor = processor
+
+	return &c, nil
+}
 
 type CoreIndexFile struct {
 	ProvisionalIndexURI string         `json:"provisionalIndexFileUri"`

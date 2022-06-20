@@ -1,10 +1,20 @@
 package sidetree
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/13x-tech/sidetree-go/pkg/did"
 )
+
+func NewProvisionalIndexFile(processor *OperationsProcessor, data []byte) (*ProvisionalIndexFile, error) {
+	var p ProvisionalIndexFile
+	if err := json.Unmarshal(data, &p); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal provisional index file: %w", err)
+	}
+	p.processor = processor
+	return &p, nil
+}
 
 type ProvisionalIndexFile struct {
 	ProvisionalProofURI string      `json:"provisionalProofFileUri"`

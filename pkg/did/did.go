@@ -5,12 +5,38 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/13x-tech/sidetree-go/internal/keys"
 
 	"github.com/gowebpki/jcs"
 	mh "github.com/multiformats/go-multihash"
 )
+
+func New(id, recoveryCommitment, prefix string, published bool) *Document {
+	var didContext []interface{}
+	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
+
+	contextBase := map[string]interface{}{}
+	contextBase["@base"] = fmt.Sprintf("did:%s:%s", prefix, id)
+	didContext = append(didContext, contextBase)
+
+	return &Document{
+		Context: "https://w3id.org/did-resolution/v1",
+		Document: &DocumentData{
+			ID:      id,
+			DocID:   fmt.Sprintf("did:%s:%s", prefix, id),
+			Context: didContext,
+		},
+		Metadata: Metadata{
+			CanonicalId: fmt.Sprintf("did:%s:%s", prefix, id),
+			Method: MetadataMethod{
+				Published:          published,
+				RecoveryCommitment: recoveryCommitment,
+			},
+		},
+	}
+}
 
 type Document struct {
 	Context  string        `json:"@context"`
@@ -600,4 +626,41 @@ func (d *Delta) Hash() (string, error) {
 	}
 
 	return base64.RawURLEncoding.EncodeToString(hashed), nil
+}
+
+func ParseLongForm(uri string) (SuffixData, Delta, error) {
+	splitURI := strings.Split(uri, ":")
+	if len(splitURI) < 2 {
+		return SuffixData{}, Delta{}, fmt.Errorf("invalid long form uri: %s", uri)
+	}
+
+	splitLength := len(splitURI)
+
+	didSuffix := splitURI[splitLength-2]
+	longFormData := splitURI[splitLength-1]
+
+	longFormDataBytes, err := base64.RawURLEncoding.DecodeString(longFormData)
+	if err != nil {
+		return SuffixData{}, Delta{}, fmt.Errorf("failed to base64 decode suffix data: %w", err)
+	}
+
+	var longFormDataStruct struct {
+		SuffixData SuffixData `json:"suffixData"`
+		Delta      Delta      `json:"delta"`
+	}
+
+	if err := json.Unmarshal(longFormDataBytes, &longFormDataStruct); err != nil {
+		return SuffixData{}, Delta{}, fmt.Errorf("failed to unmarshal suffix data: %w", err)
+	}
+
+	testSuffix, err := longFormDataStruct.SuffixData.URI()
+	if err != nil {
+		return SuffixData{}, Delta{}, fmt.Errorf("failed to create suffix uri: %w", err)
+	}
+
+	if testSuffix != didSuffix {
+		return SuffixData{}, Delta{}, fmt.Errorf("suffix uri does not match: %s != %s", testSuffix, didSuffix)
+	}
+
+	return longFormDataStruct.SuffixData, longFormDataStruct.Delta, nil
 }

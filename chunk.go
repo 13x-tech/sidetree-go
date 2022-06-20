@@ -1,10 +1,20 @@
 package sidetree
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/13x-tech/sidetree-go/pkg/did"
 )
+
+func NewChunkFile(processor *OperationsProcessor, data []byte) (*ChunkFile, error) {
+	var c ChunkFile
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal chunk: %w", err)
+	}
+	c.processor = processor
+	return &c, nil
+}
 
 type ChunkFile struct {
 	Deltas []did.Delta `json:"deltas"`
@@ -68,51 +78,55 @@ func (c *ChunkFile) updateDeltaHash(id string) (string, bool) {
 	return deltaHash, ok
 }
 
-func (c *ChunkFile) processDelta(index int, delta did.Delta) error {
-	id := c.processor.deltaMappingArray[index]
-
+func (c *ChunkFile) checkDeltaHash(id, hash string) error {
 	if deltaHash, ok := c.createdDeltaHash(id); ok {
 
-		hashed, err := delta.Hash()
-		if err != nil {
-			return fmt.Errorf("failed to hash delta: %w", err)
-		}
-
-		if deltaHash != hashed {
+		if deltaHash != hash {
 			return fmt.Errorf("delta hash does not match for created: %s", id)
 		}
 
 	} else if deltaHash, ok = c.recoveryDeltaHash(id); ok {
 
-		hashed, err := delta.Hash()
-		if err != nil {
-			return fmt.Errorf("failed to hash delta: %w", err)
-		}
-
-		if deltaHash != hashed {
+		if deltaHash != hash {
 			return fmt.Errorf("delta hash does not match for recovery: %s", id)
 		}
 
 	} else if deltaHash, ok = c.updateDeltaHash(id); ok {
 
-		hashed, err := delta.Hash()
-		if err != nil {
-			return fmt.Errorf("failed to hash delta: %w", err)
-		}
-
-		if hashed != deltaHash {
+		if deltaHash != hash {
 			return fmt.Errorf("delta hash does not match for operation: %s", id)
 		}
+	}
+	return nil
+}
+
+func (c *ChunkFile) processDelta(index int, delta did.Delta) error {
+	id := c.processor.deltaMappingArray[index]
+
+	hash, err := delta.Hash()
+	if err != nil {
+		return err
+	}
+
+	if err := c.checkDeltaHash(id, hash); err != nil {
+		return err
 	}
 
 	if err := c.processor.setUpdateCommitment(id, delta.UpdateCommitment); err != nil {
 		return fmt.Errorf("failed to set update commitment for %s: %w", id, err)
 	}
 
-	for _, patch := range delta.Patches {
-		if err := c.processor.patchDelta(id, patch); err != nil {
-			c.processor.log.Errorf("core index: %s - failed to patch delta: %w", c.processor.CoreIndexFileURI, err)
-		}
+	doc, err := c.processor.didStore.Get(id)
+	if err != nil {
+		return fmt.Errorf("failed to get document for %s: %w", id, err)
+	}
+
+	if err := PatchData(c.processor.log, c.processor.prefix, delta, doc); err != nil {
+		return fmt.Errorf("failed to patch data for %s: %w", id, err)
+	}
+
+	if err := c.processor.didStore.Put(doc); err != nil {
+		return fmt.Errorf("failed to put document for %s: %w", id, err)
 	}
 
 	return nil

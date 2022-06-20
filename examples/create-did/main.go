@@ -45,7 +45,7 @@ func main() {
 		},
 	}
 
-	did, err := did.Create(
+	id, err := did.Create(
 		did.WithGenerateKeys(),
 		did.WithPubKeys(key1),
 		did.WithServices(services...),
@@ -55,18 +55,30 @@ func main() {
 		panic(err)
 	}
 
-	longform, err := did.LongFormURI()
+	longform, err := id.LongFormURI()
 	if err != nil {
 		panic(err)
 	}
 
-	shortform, err := did.URI()
+	shortform, err := id.URI()
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("ShortForm DID: %s\n", shortform)
 	fmt.Printf("LongForm DID: %s\n", longform)
+
+	didSuffix, _, err := did.ParseLongForm(longform)
+	if err != nil {
+		panic(err)
+	}
+
+	shortFormCheck, err := didSuffix.URI()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("DID Suffix: %s\n", shortFormCheck)
 
 }
 

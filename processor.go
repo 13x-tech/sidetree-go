@@ -1,8 +1,6 @@
 package sidetree
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 
 	"github.com/13x-tech/sidetree-go/pkg/did"
@@ -191,13 +189,10 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 		return d.log.Errorf("failed to get core index file: %w", err)
 	}
 
-	var coreIndexFile CoreIndexFile
-	if err := json.Unmarshal(coreData, &coreIndexFile); err != nil {
-		return d.log.Errorf("failed to unmarshal core index file: %w", err)
+	d.CoreIndexFile, err = NewCoreIndexFile(d, coreData)
+	if err != nil {
+		return d.log.Errorf("failed to create core index file: %w", err)
 	}
-
-	coreIndexFile.processor = d
-	d.CoreIndexFile = &coreIndexFile
 
 	return nil
 }
@@ -213,13 +208,10 @@ func (d *OperationsProcessor) fetchCoreProofFile() error {
 		return d.log.Errorf("failed to get core proof file: %w", err)
 	}
 
-	var coreProofFile CoreProofFile
-	if err := json.Unmarshal(coreProofData, &coreProofFile); err != nil {
-		return d.log.Errorf("failed to unmarshal core proof file: %w", err)
+	d.CoreProofFile, err = NewCoreProofFile(d, coreProofData)
+	if err != nil {
+		return d.log.Errorf("failed to create core proof file: %w", err)
 	}
-
-	coreProofFile.processor = d
-	d.CoreProofFile = &coreProofFile
 
 	return nil
 }
@@ -235,13 +227,10 @@ func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 		return d.log.Errorf("failed to get provisional index file: %w", err)
 	}
 
-	var provisionalIndexFile ProvisionalIndexFile
-	if err := json.Unmarshal(provisionalData, &provisionalIndexFile); err != nil {
-		return d.log.Errorf("failed to unmarshal provisional index file: %w", err)
+	d.ProvisionalIndexFile, err = NewProvisionalIndexFile(d, provisionalData)
+	if err != nil {
+		return d.log.Errorf("failed to create provisional index file: %w", err)
 	}
-
-	provisionalIndexFile.processor = d
-	d.ProvisionalIndexFile = &provisionalIndexFile
 
 	return nil
 }
@@ -257,13 +246,10 @@ func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 		return d.log.Errorf("failed to get provisional proof file: %w", err)
 	}
 
-	var provisionalProofFile ProvisionalProofFile
-	if err := json.Unmarshal(provisionalProofData, &provisionalProofFile); err != nil {
-		return d.log.Errorf("failed to unmarshal provisional proof file: %w", err)
+	d.ProvisionalProofFile, err = NewProvisionalProofFile(d, provisionalProofData)
+	if err != nil {
+		return d.log.Errorf("failed to create provisional proof file: %w", err)
 	}
-
-	provisionalProofFile.processor = d
-	d.ProvisionalProofFile = &provisionalProofFile
 
 	return nil
 }
@@ -279,13 +265,10 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 		return d.log.Errorf("failed to get chunk file: %w", err)
 	}
 
-	var chunkFile ChunkFile
-	if err := json.Unmarshal(chunkData, &chunkFile); err != nil {
-		return d.log.Errorf("failed to unmarshal chunk file: %w", err)
+	d.ChunkFile, err = NewChunkFile(d, chunkData)
+	if err != nil {
+		return d.log.Errorf("failed to create chunk file: %w", err)
 	}
-
-	chunkFile.processor = d
-	d.ChunkFile = &chunkFile
 
 	return nil
 }
@@ -297,177 +280,6 @@ func (d *OperationsProcessor) createDID(id string, recoverCommitment string) err
 		return d.log.Errorf("failed to put did document: %w", err)
 	}
 
-	return nil
-}
-
-func (d *OperationsProcessor) patchDelta(id string, patch map[string]interface{}) error {
-	action, ok := patch["action"]
-	if !ok {
-		return d.log.Errorf("%s patch does not have action: %s", id, patch)
-	}
-	switch action {
-	case "replace":
-		if err := d.replaceDocEntries(id, patch); err != nil {
-			return d.log.Errorf("failed to replace doc entries for %s: %w", id, err)
-		}
-		return nil
-	case "add-public-keys":
-		if err := d.addPublicKeys(id, patch); err != nil {
-			return d.log.Errorf("failed to add public keys to %s: %w", id, err)
-		}
-		return nil
-	case "remove-public-keys":
-		if err := d.removePublicKeys(id, patch); err != nil {
-			return d.log.Errorf("%s failed to remove public keys: %w", id, err)
-		}
-		return nil
-	case "add-services":
-		if err := d.addServices(id, patch); err != nil {
-			return d.log.Errorf("%s failed to add services: %w", id, err)
-		}
-		return nil
-	case "remove-services":
-		if err := d.removeServices(id, patch); err != nil {
-			return d.log.Errorf("%s failed to remove services: %w", id, err)
-		}
-		return nil
-	case "ietf-json-patch":
-		if err := d.ietfJSONPatch(id, patch); err != nil {
-			return d.log.Errorf("failed to ietf json patch %s: %w", id, err)
-		}
-		return nil
-	default:
-		return d.log.Errorf("%s unknown patch type: %s", id, patch)
-	}
-}
-
-func (d *OperationsProcessor) replaceDocEntries(id string, patch map[string]interface{}) error {
-
-	didDoc, err := d.didStore.Get(id)
-	if err != nil {
-		return d.log.Errorf("failed to get did document: %w", err)
-	}
-
-	doc, ok := patch["document"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("%s patch does not have document: %+v", id, patch)
-	}
-
-	didDoc.Document.ResetData()
-
-	publicKeys, err := d.processKeys(id, doc)
-	if err == nil {
-		didDoc.Document.AddPublicKeys(publicKeys)
-	}
-
-	didServices, err := d.processServices(doc)
-	if err == nil {
-		didDoc.Document.AddServices(didServices)
-	}
-
-	if err := d.didStore.Put(didDoc); err != nil {
-		return fmt.Errorf("failed to update %s: %w", id, err)
-	}
-
-	return nil
-}
-
-func (d *OperationsProcessor) addPublicKeys(id string, patch map[string]interface{}) error {
-	doc, err := d.didStore.Get(id)
-	if err != nil {
-		return fmt.Errorf("%s failed to get DID for add-public-key: %w", id, err)
-	}
-	pubKeys, err := d.processKeys(id, patch)
-	if err == nil {
-		doc.Document.AddPublicKeys(pubKeys)
-		if err := d.didStore.Put(doc); err != nil {
-			return fmt.Errorf("%s failed to put DID: %w", id, err)
-		}
-	}
-	return nil
-}
-
-func (d *OperationsProcessor) removePublicKeys(id string, patch map[string]interface{}) error {
-
-	doc, err := d.didStore.Get(id)
-	if err != nil {
-		return fmt.Errorf("%s failed to get DID for remove-public-key: %w", id, err)
-	}
-
-	pKeyInterfaces, ok := patch["ids"].([]interface{})
-	if !ok {
-		return fmt.Errorf("%s patch does not have publicKey ids: %s", id, patch)
-	} else {
-
-		var pubKeys []string
-		for _, pubKey := range pKeyInterfaces {
-			key, ok := pubKey.(string)
-			if !ok {
-				return fmt.Errorf("%s patch pubKey ids do not cast to string: %s", doc.Document.ID, patch)
-			}
-			pubKeys = append(pubKeys, key)
-		}
-
-		if err := doc.Document.RemovePublicKeys(pubKeys); err != nil {
-			return fmt.Errorf("%s failed to remove public keys: %w", id, err)
-		} else {
-			if err := d.didStore.Put(doc); err != nil {
-				return fmt.Errorf("%s failed to put DID: %w", id, err)
-			}
-		}
-	}
-	return nil
-}
-
-func (d *OperationsProcessor) addServices(id string, patch map[string]interface{}) error {
-	doc, err := d.didStore.Get(id)
-	if err != nil {
-		return fmt.Errorf("%s failed to get DID for add-service: %w", id, err)
-	}
-
-	services, err := d.processServices(patch)
-	if err == nil {
-		doc.Document.AddServices(services)
-		if err := d.didStore.Put(doc); err != nil {
-			return fmt.Errorf("%s failed to put DID: %w", id, err)
-		}
-	}
-	return nil
-}
-
-func (d *OperationsProcessor) removeServices(id string, patch map[string]interface{}) error {
-	doc, err := d.didStore.Get(id)
-	if err != nil {
-		return fmt.Errorf("%s failed to get DID for remove-service: %w", id, err)
-	}
-
-	sInterfaces, ok := patch["ids"].([]interface{})
-	if !ok {
-		return fmt.Errorf("%s patch does not have service ids: %s", doc.Document.ID, patch)
-	} else {
-
-		var services []string
-		for _, s := range sInterfaces {
-			service, ok := s.(string)
-			if !ok {
-				return fmt.Errorf("%s patch service ids do not cast to string: %s", doc.Document.ID, patch)
-			}
-			services = append(services, service)
-		}
-
-		if err := doc.Document.RemoveServices(services); err != nil {
-			return fmt.Errorf("%s failed to remove services: %w", doc.Document.ID, err)
-		} else {
-			if err := d.didStore.Put(doc); err != nil {
-				return fmt.Errorf("%s failed to put DID: %w", doc.Document.ID, err)
-			}
-		}
-	}
-	return nil
-}
-
-func (d *OperationsProcessor) ietfJSONPatch(id string, patch map[string]interface{}) error {
-	fmt.Printf("%s ietf-json not supported: %s\n", id, patch)
 	return nil
 }
 
@@ -562,88 +374,6 @@ func (p *OperationsProcessor) updateDIDOperations(id string) error {
 	return nil
 }
 
-func (p *OperationsProcessor) processKeys(id string, patch map[string]interface{}) ([]did.KeyInfo, error) {
-
-	keys, ok := patch["publicKeys"]
-	if !ok {
-		return nil, fmt.Errorf("publicKeys not found")
-	}
-
-	var publicKeys []did.KeyInfo
-	keyBytes, err := json.Marshal(keys)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal publicKeys: %w", err)
-	}
-
-	if err := json.Unmarshal(keyBytes, &publicKeys); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal publicKeys: %w", err)
-	}
-
-	for i, key := range publicKeys {
-		if len(base64.RawURLEncoding.EncodeToString([]byte(key.ID))) > 50 {
-			return nil, fmt.Errorf("public key id %s is too long", key.ID)
-		}
-
-		key.ID = fmt.Sprintf("#%s", key.ID)
-		if key.Controller == "" {
-			key.Controller = fmt.Sprintf("did:%s:%s", p.prefix, id)
-		}
-		publicKeys[i] = key
-	}
-
-	return publicKeys, nil
-}
-
-func (p *OperationsProcessor) processServices(patch map[string]interface{}) ([]did.Service, error) {
-
-	services, ok := patch["services"]
-	if !ok {
-		return nil, fmt.Errorf("services not found")
-	}
-
-	var didServices []did.Service
-	serviceBytes, err := json.Marshal(services)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal services: %w", err)
-	}
-	if err := json.Unmarshal(serviceBytes, &didServices); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal services: %w", err)
-	}
-
-	for i, service := range didServices {
-		if len(base64.URLEncoding.EncodeToString([]byte(service.ID))) > 50 {
-			return nil, fmt.Errorf("service id %s is too long", service.ID)
-		}
-
-		service.ID = fmt.Sprintf("#%s", service.ID)
-		didServices[i] = service
-	}
-
-	return didServices, nil
-}
-
 func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.Document {
-
-	var didContext []interface{}
-	didContext = append(didContext, "https://www.w3.org/ns/did/v1")
-
-	contextBase := map[string]interface{}{}
-	contextBase["@base"] = fmt.Sprintf("did:%s:%s", d.prefix, id)
-	didContext = append(didContext, contextBase)
-
-	return &did.Document{
-		Context: "https://w3id.org/did-resolution/v1",
-		Document: &did.DocumentData{
-			ID:      id,
-			DocID:   fmt.Sprintf("did:%s:%s", d.prefix, id),
-			Context: didContext,
-		},
-		Metadata: did.Metadata{
-			CanonicalId: fmt.Sprintf("did:%s:%s", d.prefix, id),
-			Method: did.MetadataMethod{
-				Published:          true,
-				RecoveryCommitment: recoveryCommitment,
-			},
-		},
-	}
+	return did.New(id, recoveryCommitment, d.prefix, true)
 }

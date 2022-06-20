@@ -1,8 +1,18 @@
 package sidetree
 
 import (
+	"encoding/json"
 	"fmt"
 )
+
+func NewProvisionalProofFile(processor *OperationsProcessor, data []byte) (*ProvisionalProofFile, error) {
+	var p ProvisionalProofFile
+	if err := json.Unmarshal(data, &p); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal provisional proof file: %w", err)
+	}
+	p.processor = processor
+	return &p, nil
+}
 
 type ProvisionalProofFile struct {
 	Operations PorvProofOperations `json:"operations"`
