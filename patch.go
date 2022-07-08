@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/did"
 )
 
 func PatchData(log Logger, prefix string, delta did.Delta, doc *did.Document) error {

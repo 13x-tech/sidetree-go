@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/13x-tech/sidetree-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/did"
 )
 
 type Closer struct{}
@@ -151,6 +151,21 @@ type TestIndexerStorage struct {
 	mu       sync.Mutex
 	didOps   map[string][]SideTreeOp
 	indexOps map[int][]SideTreeOp
+}
+
+func (t *TestIndexerStorage) IsProcessed(height int64) (bool, error) {
+	_, ok := t.indexOps[int(height)]
+	if ok {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (t *TestIndexerStorage) SetProcessed(height int64, hash string) error {
+	return nil
+}
+func (t *TestIndexerStorage) LastSynced() (int, error) {
+	return len(t.indexOps), nil
 }
 
 func (t *TestIndexerStorage) PutOps(index int, ops []SideTreeOp) error {

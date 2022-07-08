@@ -3,7 +3,7 @@ package sidetree
 import (
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/did"
 )
 
 func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, error) {

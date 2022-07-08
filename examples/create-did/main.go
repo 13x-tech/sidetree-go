@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/internal/keys"
-	"github.com/13x-tech/sidetree-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/api"
+	"github.com/13x-tech/ion-sdk-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/keys"
+	"github.com/13x-tech/ion-sdk-go/pkg/operations/create"
 
 	"github.com/gowebpki/jcs"
 )
@@ -16,14 +18,23 @@ func genKey(purposes []string) (did.KeyInfo, error) {
 		return did.KeyInfo{}, fmt.Errorf("failed to generate key: %w", err)
 	}
 
-	return JWKtoDIDKey(key, purposes)
+	return JWK(key, purposes)
 }
 
 //This is temporary
 func main() {
-	fmt.Println("Generating Test Identity...")
 
-	key1, err := genKey([]string{"authentication", "assertionMethod", "capabilityDelegation", "capabilityInvocation", "keyAgreement"})
+	fmt.Println("Generating Test Identity...")
+	recoverKey, err := keys.GenerateES256K([]byte("some bullshit"))
+	if err != nil {
+		panic(err)
+	}
+
+	updateKey, err := keys.GenerateES256K([]byte("some bullshit 2"))
+	if err != nil {
+		panic(err)
+	}
+	deviceKey, err := genKey([]string{"authentication", "assertionMethod", "capabilityDelegation", "capabilityInvocation", "keyAgreement"})
 	if err != nil {
 		panic(err)
 	}
@@ -45,51 +56,57 @@ func main() {
 		},
 	}
 
-	id, err := did.Create(
-		did.WithGenerateKeys(),
-		did.WithPubKeys(key1),
-		did.WithServices(services...),
+	id, err := create.New(
+		create.WithUpdateKey(updateKey),
+		create.WithRecoverKey(recoverKey),
+		create.WithPubKeys(deviceKey),
+		create.WithServices(services...),
 	)
 
 	if err != nil {
 		panic(err)
 	}
 
-	longform, err := id.LongFormURI()
+	suffixData, delta, err := id.Operation()
 	if err != nil {
 		panic(err)
 	}
 
-	shortform, err := id.URI()
+	ion, err := api.New(
+		api.WithEndpoint("https://kenny-1.cow-tone.ts.net/operations"),
+		api.WithChallenge("https://beta.ion.msidentity.com/api/v1.0/proof-of-work-challenge"),
+	)
+
+	createOp := api.CreateOperation(suffixData, delta)
+
+	response, err := ion.Submit(createOp)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("ShortForm DID: %s\n", shortform)
-	fmt.Printf("LongForm DID: %s\n", longform)
-
-	didSuffix, _, err := did.ParseLongForm(longform)
-	if err != nil {
-		panic(err)
-	}
-
-	shortFormCheck, err := didSuffix.URI()
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("DID Suffix: %s\n", shortFormCheck)
-
+	fmt.Printf("Response: %s", response)
 }
 
-func JWKtoDIDKey(key *keys.JSONWebKey, purposes []string) (did.KeyInfo, error) {
+func JWK(key *keys.DIDKey, purposes []string) (did.KeyInfo, error) {
+	return JWKWithID(key, purposes, "")
+}
+
+func JWKWithID(key *keys.DIDKey, purposes []string, id string) (did.KeyInfo, error) {
 
 	didKey := did.KeyInfo{}
 
-	didKey.ID = key.KeyID()
-	didKey.Type = key.KeyType().String()
+	if len(id) > 0 {
+		didKey.ID = id
+	} else {
+		keyId, err := key.ID()
+		if err != nil {
+			return didKey, fmt.Errorf("could not generate KeyID: %w", err)
+		}
+		didKey.ID = keyId
+	}
 
-	keyData, err := key.MarshalJSON()
+	didKey.Type = key.KeyType().String()
+	keyData, err := key.Key().MarshalJSON()
 	if err != nil {
 		return did.KeyInfo{}, fmt.Errorf("failed to marshal key: %w", err)
 	}

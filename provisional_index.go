@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/did"
 )
 
 func NewProvisionalIndexFile(processor *OperationsProcessor, data []byte) (*ProvisionalIndexFile, error) {
