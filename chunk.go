@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/13x-tech/ion-sdk-go/pkg/api"
 	"github.com/13x-tech/ion-sdk-go/pkg/did"
-	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
 func NewChunkFile(processor *OperationsProcessor, data []byte) (*ChunkFile, error) {
@@ -49,24 +47,6 @@ func (c *ChunkFile) Process() error {
 	return nil
 }
 
-func (c *ChunkFile) createdDeltaHash(id string) (string, bool) {
-	if c.processor.createdDeltaHash == nil {
-		return "", false
-	}
-
-	deltaHash, ok := c.processor.createdDeltaHash[id]
-	return deltaHash, ok
-}
-
-func (c *ChunkFile) recoveryDeltaHash(id string) (string, bool) {
-	if c.processor.CoreProofFile == nil || c.processor.CoreProofFile.recoveryDeltaHash == nil {
-		return "", false
-	}
-
-	deltaHash, ok := c.processor.CoreProofFile.recoveryDeltaHash[id]
-	return deltaHash, ok
-}
-
 func (c *ChunkFile) updateDeltaHash(id string) (string, bool) {
 	if c.processor.ProvisionalProofFile == nil {
 		return "", false
@@ -80,63 +60,22 @@ func (c *ChunkFile) updateDeltaHash(id string) (string, bool) {
 	return deltaHash, ok
 }
 
-func (c *ChunkFile) checkDeltaHash(id, hash string) error {
-	if deltaHash, ok := c.createdDeltaHash(id); ok {
-
-		if deltaHash != hash {
-			return fmt.Errorf("delta hash does not match for created: %s", id)
-		}
-
-	} else if deltaHash, ok = c.recoveryDeltaHash(id); ok {
-
-		if deltaHash != hash {
-			return fmt.Errorf("delta hash does not match for recovery: %s", id)
-		}
-
-	} else if deltaHash, ok = c.updateDeltaHash(id); ok {
-
-		if deltaHash != hash {
-			return fmt.Errorf("delta hash does not match for operation: %s", id)
-		}
-	}
-	return nil
-}
-
 func (c *ChunkFile) processDelta(index int, delta did.Delta) error {
 	id := c.processor.deltaMappingArray[index]
 
-	suffixData, isCreate := c.processor.CoreIndexFile.createSuffix[id]
-	if isCreate {
-
-		createOp := api.CreateOperation(suffixData, delta)
-		didOps, err := operations.New(
-			operations.WithMethod(c.processor.method),
-			operations.WithOperations(
-				createOp,
-			),
-		)
-		if err != nil {
-			return fmt.Errorf("could not create new operation: %w", err)
-		}
-
-		opsData, err := didOps.SerializedOps()
-		if err != nil {
-			return fmt.Errorf("could not serialize ops data: %w", err)
-		}
-		if err := c.processor.didStore.PutOps(id, opsData); err != nil {
-			return fmt.Errorf("could not store ops: %w", err)
-		}
-		return nil
+	createOp, ok := c.processor.createOps[id]
+	if ok {
+		createOp.SetDelta(delta)
 	}
 
-	didOpsB, err := c.processor.didStore.GetOps(id)
-	if err != nil {
-		return fmt.Errorf("could not get operations: %w", err)
+	recoverOp, ok := c.processor.recoverOps[id]
+	if ok {
+		recoverOp.SetDelta(delta)
 	}
 
-	_, err = api.ParseOps(didOpsB)
-	if err != nil {
-		return fmt.Errorf("could not parse ops: %w", err)
+	updateOp, ok := c.processor.updateOps[id]
+	if ok {
+		updateOp.SetDelta(delta)
 	}
 
 	return nil

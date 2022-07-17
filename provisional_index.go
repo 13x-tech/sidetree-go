@@ -3,8 +3,6 @@ package sidetree
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/13x-tech/ion-sdk-go/pkg/did"
 )
 
 func NewProvisionalIndexFile(processor *OperationsProcessor, data []byte) (*ProvisionalIndexFile, error) {
@@ -68,19 +66,7 @@ func (p *ProvisionalIndexFile) processRevealValues() error {
 	p.revealValues = map[string]string{}
 
 	for _, op := range p.Operations.Update {
-		updateCommitment, err := p.processor.getUpdateCommitment(op.DIDSuffix)
-		if err != nil {
-			p.processor.log.Errorf(
-				"core index: %s - failed to get update commitment for %s: %w",
-				p.processor.CoreIndexFileURI,
-				op.DIDSuffix,
-				err,
-			)
-			continue
-		}
-		if did.CheckReveal(op.RevealValue, updateCommitment) {
-			p.revealValues[op.DIDSuffix] = op.RevealValue
-		}
+		p.revealValues[op.DIDSuffix] = op.RevealValue
 	}
 	return nil
 }

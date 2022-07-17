@@ -20,8 +20,7 @@ func NewCoreProofFile(processor *OperationsProcessor, data []byte) (*CoreProofFi
 type CoreProofFile struct {
 	Operations CoreProofOperations `json:"operations"`
 
-	recoveryDeltaHash map[string]string
-	processor         *OperationsProcessor
+	processor *OperationsProcessor
 }
 
 func (p *CoreProofFile) Process() error {
@@ -32,8 +31,6 @@ func (p *CoreProofFile) Process() error {
 		len(p.Operations.Deactivate) != len(p.processor.CoreIndexFile.Operations.Deactivate) {
 		return fmt.Errorf("core proof and core index file do not match")
 	}
-
-	p.recoveryDeltaHash = map[string]string{}
 
 	for i, op := range p.Operations.Recover {
 		coreOp := p.processor.CoreIndexFile.Operations.Recover[i]
@@ -63,14 +60,28 @@ func (p *CoreProofFile) Process() error {
 }
 
 func (p *CoreProofFile) processDeactivate(id string, revealValue string, op SignedDeactivateDataOp) error {
-	deactivate := operations.DeactivateOperation(id, revealValue, op.SignedData)
+	deactivate := operations.DeactivateOperation(
+		p.processor.Anchor(),
+		p.processor.SystemAnchor(),
+		id,
+		revealValue,
+		op.SignedData,
+	)
 	p.processor.deactivateOps[id] = deactivate
+
+	//TODO Process this Deactivate Here
 
 	return nil
 }
 
 func (p *CoreProofFile) processRecover(id string, revealValue string, op SignedRecoverDataOp) error {
-	recover := operations.RecoverOperation(id, revealValue, op.SignedData)
+	recover := operations.RecoverOperation(
+		p.processor.Anchor(),
+		p.processor.SystemAnchor(),
+		id,
+		revealValue,
+		op.SignedData,
+	)
 	p.processor.recoverOps[id] = recover
 
 	return nil

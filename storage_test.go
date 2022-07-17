@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"sync"
 	"testing"
 
@@ -43,9 +42,9 @@ type TestStorage struct {
 	cas   *TestCASStorage
 }
 
-func (t *TestStorage) Indexer() (Indexer, error) {
-	return t.index, nil
-}
+// func (t *TestStorage) Indexer() (Indexer, error) {
+// 	return t.index, nil
+// }
 
 func (t *TestStorage) DIDs() (DIDs, error) {
 	return t.dids, nil
@@ -237,29 +236,29 @@ var storageTestOps = []SideTreeOp{
 	},
 }
 
-func TestIndexeOps(t *testing.T) {
-	storage := NewTestStorage()
-	indexer, err := storage.Indexer()
-	if err != nil {
-		t.Errorf("Error creating indexer: %v", err)
-	}
-	if indexer == nil {
-		t.Error("Indexer is nil")
-	}
+// func TestIndexeOps(t *testing.T) {
+// 	storage := NewTestStorage()
+// 	indexer, err := storage.Indexer()
+// 	if err != nil {
+// 		t.Errorf("Error creating indexer: %v", err)
+// 	}
+// 	if indexer == nil {
+// 		t.Error("Indexer is nil")
+// 	}
 
-	if err := indexer.PutOps(1234, storageTestOps); err != nil {
-		t.Errorf("Error putting ops: %v", err)
-	}
+// 	if err := indexer.PutOps(1234, storageTestOps); err != nil {
+// 		t.Errorf("Error putting ops: %v", err)
+// 	}
 
-	ops, err := indexer.GetOps(1234)
-	if err != nil {
-		t.Errorf("Error getting ops: %v", err)
-	}
+// 	ops, err := indexer.GetOps(1234)
+// 	if err != nil {
+// 		t.Errorf("Error getting ops: %v", err)
+// 	}
 
-	if !reflect.DeepEqual(ops, storageTestOps) {
-		t.Errorf("Ops not equal: %v", ops)
-	}
-}
+// 	if !reflect.DeepEqual(ops, storageTestOps) {
+// 		t.Errorf("Ops not equal: %v", ops)
+// 	}
+// }
 
 // func TestDIDOps(t *testing.T) {
 // 	storage := NewTestStorage()
@@ -286,54 +285,54 @@ func TestIndexeOps(t *testing.T) {
 
 // }
 
-func TestDIDs(t *testing.T) {
-	storage := NewTestStorage()
-	dids, err := storage.DIDs()
-	if err != nil {
-		t.Errorf("Error creating DIDs storage: %v", err)
-	}
-	if dids == nil {
-		t.Errorf("DIDs storage is nil")
-	}
+// func TestDIDs(t *testing.T) {
+// 	storage := NewTestStorage()
+// 	dids, err := storage.DIDs()
+// 	if err != nil {
+// 		t.Errorf("Error creating DIDs storage: %v", err)
+// 	}
+// 	if dids == nil {
+// 		t.Errorf("DIDs storage is nil")
+// 	}
 
-	doc := testDoc()
+// 	doc := testDoc()
 
-	if err := dids.Put(doc); err != nil {
-		t.Errorf("Error putting DID: %v", err)
-	}
+// 	if err := dids.Put(doc); err != nil {
+// 		t.Errorf("Error putting DID: %v", err)
+// 	}
 
-	doc2, err := dids.Get(doc.Document.ID)
-	if err != nil {
-		t.Errorf("Error getting DID: %v", err)
-	}
+// 	doc2, err := dids.Get(doc.Document.ID)
+// 	if err != nil {
+// 		t.Errorf("Error getting DID: %v", err)
+// 	}
 
-	if !reflect.DeepEqual(doc, doc2) {
-		t.Errorf("DIDs not equal: %v", doc)
-	}
+// 	if !reflect.DeepEqual(doc, doc2) {
+// 		t.Errorf("DIDs not equal: %v", doc)
+// 	}
 
-	if err := dids.Deactivate(doc.Document.ID); err != nil {
-		t.Errorf("Error deactivating DID: %v", err)
-	}
+// 	if err := dids.Deactivate(doc.Document.ID); err != nil {
+// 		t.Errorf("Error deactivating DID: %v", err)
+// 	}
 
-	_, err = dids.Get(doc.Document.ID)
-	if err == nil {
-		t.Errorf("Deactivated did should not be found")
-	}
+// 	_, err = dids.Get(doc.Document.ID)
+// 	if err == nil {
+// 		t.Errorf("Deactivated did should not be found")
+// 	}
 
-	if err := dids.Recover(doc.Document.ID); err != nil {
-		t.Errorf("Error recovering DID: %v", err)
-	}
+// 	if err := dids.Recover(doc.Document.ID); err != nil {
+// 		t.Errorf("Error recovering DID: %v", err)
+// 	}
 
-	doc3, err := dids.Get(doc.Document.ID)
-	if err != nil {
-		t.Errorf("Error getting DID: %v", err)
-	}
+// 	doc3, err := dids.Get(doc.Document.ID)
+// 	if err != nil {
+// 		t.Errorf("Error getting DID: %v", err)
+// 	}
 
-	if !reflect.DeepEqual(doc, doc3) {
-		t.Errorf("DIDs not equal: %v", doc)
-	}
+// 	if !reflect.DeepEqual(doc, doc3) {
+// 		t.Errorf("DIDs not equal: %v", doc)
+// 	}
 
-}
+// }
 
 func TestCAS(t *testing.T) {
 

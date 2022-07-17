@@ -3,6 +3,8 @@ package sidetree
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
 func NewProvisionalProofFile(processor *OperationsProcessor, data []byte) (*ProvisionalProofFile, error) {
@@ -54,23 +56,19 @@ func (p *ProvisionalProofFile) Process() error {
 func (p *ProvisionalProofFile) processUpdate(index int, update SignedUpdateDataOp) error {
 	id := p.processor.deltaMappingArray[index]
 
-	revealValue, ok := p.processor.ProvisionalIndexFile.revealValues[id]
+	reveal, ok := p.processor.ProvisionalIndexFile.revealValues[id]
 	if !ok {
 		return fmt.Errorf("failed to find reveal value for %s", id)
 	}
 
-	if ok, err := update.ValidateReveal(revealValue); err != nil {
-		return fmt.Errorf("failed to validate reveal value in provisional update for %s: %w", id, err)
-	} else if !ok {
-		return fmt.Errorf("failed to validate reveal value in provisional update for %s", id)
-	}
-
-	deltaHash, err := update.DeltaHash()
-	if err != nil {
-		return fmt.Errorf("failed to get delta hash for %s: %w", id, err)
-	}
-
-	p.verifiedOps[id] = deltaHash
+	op := operations.UpdateOperation(
+		p.processor.Anchor(),
+		p.processor.SystemAnchor(),
+		id,
+		reveal,
+		update.SignedData,
+	)
+	p.processor.updateOps[id] = op
 
 	return nil
 }

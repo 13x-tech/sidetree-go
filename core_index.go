@@ -25,8 +25,7 @@ type CoreIndexFile struct {
 	WriterLockId        string         `json:"writerLockId,omitempty"`
 	Operations          CoreOperations `json:"operations"`
 
-	suffixMap    map[string]struct{}
-	createSuffix map[string]did.SuffixData
+	suffixMap map[string]struct{}
 
 	processor *OperationsProcessor
 }
@@ -63,7 +62,6 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 	// its files are to be ignored.
 
 	c.suffixMap = map[string]struct{}{}
-	c.createSuffix = map[string]did.SuffixData{}
 
 	for _, op := range c.Operations.Create {
 		uri, err := op.SuffixData.URI()
@@ -75,7 +73,6 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 			return fmt.Errorf("duplicate operation found in create")
 		}
 		c.suffixMap[uri] = struct{}{}
-		c.createSuffix[uri] = op.SuffixData
 	}
 
 	for _, op := range c.Operations.Recover {

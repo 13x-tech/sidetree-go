@@ -58,6 +58,7 @@ type OperationsProcessor struct {
 	ChunkFile    *ChunkFile
 
 	casStore CAS
+	didStore DIDs
 
 	createOps     map[string]operations.CreateInterface
 	updateOps     map[string]operations.UpdateInterface
@@ -65,13 +66,20 @@ type OperationsProcessor struct {
 	recoverOps    map[string]operations.RecoverInterface
 
 	deltaMappingArray []string
-	createdDeltaHash  map[string]string
 
 	baseFeeFn   *BaseFeeAlgorithm
 	perOpFeeFn  *PerOperationFee
 	valueLockFn *ValueLocking
 
 	baseFee int
+}
+
+func (b *OperationsProcessor) Anchor() string {
+	return b.op.AnchorString
+}
+
+func (b *OperationsProcessor) SystemAnchor() string {
+	return b.op.SystemAnchorPoint
 }
 
 func (d *OperationsProcessor) Process() error {
@@ -169,6 +177,66 @@ func (d *OperationsProcessor) Process() error {
 		}
 	}
 
+	for _, id := range d.deltaMappingArray {
+
+		didOps, err := d.didStore.GetOps(id)
+		if err != nil {
+			d.log.Debug("core index: %s - failed to get did ops for %s: %s", d.CoreIndexFileURI, id, err)
+			continue
+		}
+
+		ops, err := operations.ParseOps(didOps)
+		if err != nil {
+			d.log.Debug("core index: %s - failed to parse ops for %s: %s\n%s\n\n", d.CoreIndexFileURI, id, err, string(didOps))
+			continue
+		}
+
+		o, err := operations.New(
+			operations.WithMethod(d.method),
+			operations.WithOperations(ops),
+		)
+		if err != nil {
+			d.log.Debug("core index: %s - failed to create operations processor for %s: %s", d.CoreIndexFileURI, id, err)
+			continue
+		}
+
+		createOp, ok := d.createOps[id]
+		if ok {
+			if err := o.Process(createOp); err != nil {
+				d.log.Debug("core index: %s - failed to process create op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
+		} else if recoverOp, ok := d.recoverOps[id]; ok {
+			if err := o.Process(recoverOp); err != nil {
+				d.log.Debug("core index: %s - failed to process recover op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
+		} else if updateOp, ok := d.updateOps[id]; ok {
+			if err := o.Process(updateOp); err != nil {
+				d.log.Debug("core index: %s - failed to process update op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
+		} else if deactivateOp, ok := d.deactivateOps[id]; ok {
+			if err := o.Process(deactivateOp); err != nil {
+				d.log.Debug("core index: %s - failed to process deactivate op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
+		} else {
+			d.log.Debug("core index: %s - no op for %s", d.CoreIndexFileURI, id)
+			continue
+		}
+
+		didOps, err = o.SerializedOps()
+		if err != nil {
+			d.log.Debug("core index: %s - failed to serialize ops for %s: %s", d.CoreIndexFileURI, id, err)
+			continue
+		}
+
+		if err := d.didStore.PutOps(id, didOps); err != nil {
+			d.log.Debug("core index: %s - failed to put did ops for %s: %s", d.CoreIndexFileURI, id, err)
+		}
+	}
+
 	return nil
 
 }
@@ -250,7 +318,6 @@ func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 }
 
 func (d *OperationsProcessor) fetchChunkFile() error {
-
 	if d.ChunkFileURI == "" {
 		return d.log.Errorf("no chunk file URI")
 	}
@@ -268,34 +335,6 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 	return nil
 }
 
-func (d *OperationsProcessor) setUpdateCommitment(id string, commitment string) error {
-	didDoc, err := d.didStore.Get(id)
-	if err != nil {
-		return fmt.Errorf("failed to get did doc for %s: %w", id, err)
-	}
-
-	didDoc.Metadata.Method.UpdateCommitment = commitment
-
-	if err := d.didStore.Put(didDoc); err != nil {
-		return fmt.Errorf("failed to put did document: %w", err)
-	}
-
-	return nil
-}
-
-func (d *OperationsProcessor) getUpdateCommitment(id string) (string, error) {
-	didDoc, err := d.didStore.Get(id)
-	if err != nil {
-		return "", fmt.Errorf("failed to get did doc for %s: %w", id, err)
-	}
-
-	if didDoc.Metadata.Method.UpdateCommitment == "" {
-		return "", fmt.Errorf("no update commitment for %s", id)
-	}
-
-	return didDoc.Metadata.Method.UpdateCommitment, nil
-}
-
 func (p *OperationsProcessor) populateDeltaMappingArray() error {
 	coreIndex := p.CoreIndexFile
 	if coreIndex == nil {
@@ -307,14 +346,19 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		return fmt.Errorf("provisional index file is nil")
 	}
 
-	p.createdDeltaHash = map[string]string{}
 	for _, op := range coreIndex.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
 			return fmt.Errorf("failed to get uri from create operation: %w", err)
 		}
 
-		p.createdDeltaHash[uri] = op.SuffixData.DeltaHash
+		createOp := operations.CreateOperation(
+			p.Anchor(),
+			p.SystemAnchor(),
+			op.SuffixData,
+		)
+
+		p.createOps[uri] = createOp
 		p.deltaMappingArray = append(p.deltaMappingArray, uri)
 	}
 
