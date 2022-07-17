@@ -179,7 +179,7 @@ func (d *OperationsProcessor) Process() error {
 
 	for _, id := range d.deltaMappingArray {
 
-		didOps, err := d.didStore.GetOps(id)
+		didOps, err := d.didStore.GetDIDOps(id)
 		if err != nil {
 			d.log.Debug("core index: %s - failed to get did ops for %s: %s", d.CoreIndexFileURI, id, err)
 			continue
@@ -211,7 +211,7 @@ func (d *OperationsProcessor) Process() error {
 				d.log.Debug("core index: %s - failed to serialize create op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
-			if err := d.didStore.PutOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
+			if err := d.didStore.PutDIDOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
 				d.log.Debug("core index: %s - failed to put create op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
@@ -226,7 +226,7 @@ func (d *OperationsProcessor) Process() error {
 				d.log.Debug("core index: %s - failed to serialize recover op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
-			if err := d.didStore.PutOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
+			if err := d.didStore.PutDIDOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
 				d.log.Debug("core index: %s - failed to put recover op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
@@ -240,7 +240,7 @@ func (d *OperationsProcessor) Process() error {
 				d.log.Debug("core index: %s - failed to serialize update op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
-			if err := d.didStore.PutOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
+			if err := d.didStore.PutDIDOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
 				d.log.Debug("core index: %s - failed to put update op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
@@ -254,7 +254,7 @@ func (d *OperationsProcessor) Process() error {
 				d.log.Debug("core index: %s - failed to serialize deactivate op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
-			if err := d.didStore.PutOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
+			if err := d.didStore.PutDIDOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
 				d.log.Debug("core index: %s - failed to put deactivate op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}

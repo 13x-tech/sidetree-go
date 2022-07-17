@@ -93,14 +93,14 @@ type TestDIDsStorage struct {
 	ops map[string][]byte
 }
 
-func (t *TestDIDsStorage) PutOp(id, anchor, sequence string, op []byte) error {
+func (t *TestDIDsStorage) PutDIDOp(id, anchor, sequence string, op []byte) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.ops[id] = op
 	return nil
 }
 
-func (t *TestDIDsStorage) GetOps(id string) ([]byte, error) {
+func (t *TestDIDsStorage) GetDIDOps(id string) ([]byte, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if data, ok := t.ops[id]; ok {

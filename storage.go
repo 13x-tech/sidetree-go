@@ -19,6 +19,6 @@ type Storage interface {
 
 type DIDs interface {
 	io.Closer
-	GetOps(id string) ([]byte, error)
-	PutOp(id, anchor, sequence string, op []byte) error
+	GetDIDOps(id string) ([]byte, error)
+	PutDIDOp(id, anchor, sequence string, op []byte) error
 }

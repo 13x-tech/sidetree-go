@@ -10,7 +10,7 @@ func WithPrefix(prefix string) SidetreeOption {
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
-			t.prefix = prefix
+			t.method = prefix
 		case *OperationsProcessor:
 			t.method = prefix
 		}
@@ -102,7 +102,7 @@ type PerOperationFee func(baseFee int, opCount int, anchorPoint string) bool
 type ValueLocking func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool
 
 type SideTree struct {
-	prefix      string
+	method      string
 	store       Storage
 	log         Logger
 	baseFeeFn   *BaseFeeAlgorithm
@@ -115,7 +115,7 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp) error {
 	for _, op := range ops {
 		processor, err := Processor(
 			op,
-			WithPrefix(s.prefix),
+			WithPrefix(s.method),
 			WithStorage(s.store),
 			WithLogger(s.log),
 		)
