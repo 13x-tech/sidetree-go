@@ -24,9 +24,7 @@ func NewTestStorage() *TestStorage {
 			didOps:   map[string][]SideTreeOp{},
 		},
 		dids: &TestDIDsStorage{
-			dids:        map[string]*did.Document{},
-			deactivated: map[string]struct{}{},
-			mu:          sync.Mutex{},
+			mu: sync.Mutex{},
 		},
 		cas: &TestCASStorage{
 			cas: map[string][]byte{},
@@ -91,65 +89,14 @@ func (t *TestCASStorage) insertObject(id string, data []byte) error {
 
 type TestDIDsStorage struct {
 	Closer
-	mu          sync.Mutex
-	dids        map[string]*did.Document
-	deactivated map[string]struct{}
-	ops         map[string][]byte
+	mu  sync.Mutex
+	ops map[string][]byte
 }
 
-func (t *TestDIDsStorage) Put(doc *did.Document) error {
+func (t *TestDIDsStorage) PutOp(id, anchor, sequence string, op []byte) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.dids[doc.Document.ID] = doc
-	return nil
-}
-
-func (t *TestDIDsStorage) Deactivate(id string) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.deactivated[id] = struct{}{}
-	return nil
-}
-
-func (t *TestDIDsStorage) Recover(id string) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	delete(t.deactivated, id)
-	return nil
-}
-
-func (t *TestDIDsStorage) Get(id string) (*did.Document, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	_, ok := t.deactivated[id]
-	if ok {
-		return nil, fmt.Errorf("did %s is deactivated", id)
-	}
-
-	doc, ok := t.dids[id]
-	if !ok {
-		return nil, fmt.Errorf("no DID found for id %s", id)
-	}
-	return doc, nil
-}
-
-func (t *TestDIDsStorage) List() ([]string, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	var ids []string
-	for id := range t.dids {
-		_, ok := t.deactivated[id]
-		if !ok {
-			ids = append(ids, id)
-		}
-	}
-	return ids, nil
-}
-
-func (t *TestDIDsStorage) PutOps(id string, opsJSON []byte) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.ops[id] = opsJSON
+	t.ops[id] = op
 	return nil
 }
 

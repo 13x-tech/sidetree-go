@@ -206,9 +206,28 @@ func (d *OperationsProcessor) Process() error {
 				d.log.Debug("core index: %s - failed to process create op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
+			opBytes, err := createOp.Serialize()
+			if err != nil {
+				d.log.Debug("core index: %s - failed to serialize create op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
+			if err := d.didStore.PutOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
+				d.log.Debug("core index: %s - failed to put create op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
+
 		} else if recoverOp, ok := d.recoverOps[id]; ok {
 			if err := o.Process(recoverOp); err != nil {
 				d.log.Debug("core index: %s - failed to process recover op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
+			opBytes, err := recoverOp.Serialize()
+			if err != nil {
+				d.log.Debug("core index: %s - failed to serialize recover op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
+			if err := d.didStore.PutOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
+				d.log.Debug("core index: %s - failed to put recover op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
 		} else if updateOp, ok := d.updateOps[id]; ok {
@@ -216,24 +235,32 @@ func (d *OperationsProcessor) Process() error {
 				d.log.Debug("core index: %s - failed to process update op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
+			opBytes, err := updateOp.Serialize()
+			if err != nil {
+				d.log.Debug("core index: %s - failed to serialize update op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
+			if err := d.didStore.PutOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
+				d.log.Debug("core index: %s - failed to put update op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
 		} else if deactivateOp, ok := d.deactivateOps[id]; ok {
 			if err := o.Process(deactivateOp); err != nil {
 				d.log.Debug("core index: %s - failed to process deactivate op for %s: %s", d.CoreIndexFileURI, id, err)
 				continue
 			}
+			opBytes, err := deactivateOp.Serialize()
+			if err != nil {
+				d.log.Debug("core index: %s - failed to serialize deactivate op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
+			if err := d.didStore.PutOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
+				d.log.Debug("core index: %s - failed to put deactivate op for %s: %s", d.CoreIndexFileURI, id, err)
+				continue
+			}
 		} else {
 			d.log.Debug("core index: %s - no op for %s", d.CoreIndexFileURI, id)
 			continue
-		}
-
-		didOps, err = o.SerializedOps()
-		if err != nil {
-			d.log.Debug("core index: %s - failed to serialize ops for %s: %s", d.CoreIndexFileURI, id, err)
-			continue
-		}
-
-		if err := d.didStore.PutOps(id, didOps); err != nil {
-			d.log.Debug("core index: %s - failed to put did ops for %s: %s", d.CoreIndexFileURI, id, err)
 		}
 	}
 
