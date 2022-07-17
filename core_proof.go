@@ -3,6 +3,8 @@ package sidetree
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
 func NewCoreProofFile(processor *OperationsProcessor, data []byte) (*CoreProofFile, error) {
@@ -61,59 +63,15 @@ func (p *CoreProofFile) Process() error {
 }
 
 func (p *CoreProofFile) processDeactivate(id string, revealValue string, op SignedDeactivateDataOp) error {
-	if ok, err := op.ValidateReveal(revealValue); err != nil {
-		return fmt.Errorf("failed to validate reveal value in core proof recover for %s: %w", id, err)
-	} else if !ok {
-		return fmt.Errorf("failed to validate reveal value in core proof recover for %s", id)
-	}
-
-	didDoc, err := p.processor.didStore.Get(id)
-	if err != nil {
-		return fmt.Errorf("failed to get did document for %s: %w", id, err)
-	}
-
-	//TODO Better way to mark document as deactivated
-	didDoc.Metadata.Method.UpdateCommitment = ""
-
-	if err := p.processor.didStore.Put(didDoc); err != nil {
-		return fmt.Errorf("failed to put did document for %s: %w", id, err)
-	}
-
-	if err := p.processor.didStore.Deactivate(id); err != nil {
-		return fmt.Errorf("failed to deactivate did document for %s: %w", id, err)
-	}
+	deactivate := operations.DeactivateOperation(id, revealValue, op.SignedData)
+	p.processor.deactivateOps[id] = deactivate
 
 	return nil
 }
 
 func (p *CoreProofFile) processRecover(id string, revealValue string, op SignedRecoverDataOp) error {
-	if ok, err := op.ValidateReveal(revealValue); err != nil {
-		return fmt.Errorf("failed to validate reveal value in core proof recover for %s: %w", id, err)
-	} else if !ok {
-		return fmt.Errorf("failed to validate reveal value in core proof recover for %s", id)
-	}
-
-	deltaHash, err := op.DeltaHash()
-	if err != nil {
-		return fmt.Errorf("failed to get delta hash for %s: %w", id, err)
-	}
-
-	p.recoveryDeltaHash[id] = deltaHash
-
-	if err := p.processor.didStore.Recover(id); err != nil {
-		return fmt.Errorf("failed to recover did document for %s: %w", id, err)
-	}
-
-	didDoc, err := p.processor.didStore.Get(id)
-	if err != nil {
-		return fmt.Errorf("failed to get did document for %s: %w", id, err)
-	}
-
-	didDoc.Document.ResetData()
-
-	if err := p.processor.didStore.Put(didDoc); err != nil {
-		return fmt.Errorf("failed to put did document for %s: %w", id, err)
-	}
+	recover := operations.RecoverOperation(id, revealValue, op.SignedData)
+	p.processor.recoverOps[id] = recover
 
 	return nil
 }

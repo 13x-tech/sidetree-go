@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/13x-tech/ion-sdk-go/pkg/api"
 	"github.com/13x-tech/ion-sdk-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
 func NewChunkFile(processor *OperationsProcessor, data []byte) (*ChunkFile, error) {
@@ -48,11 +50,11 @@ func (c *ChunkFile) Process() error {
 }
 
 func (c *ChunkFile) createdDeltaHash(id string) (string, bool) {
-	if c.processor.createdDelaHash == nil {
+	if c.processor.createdDeltaHash == nil {
 		return "", false
 	}
 
-	deltaHash, ok := c.processor.createdDelaHash[id]
+	deltaHash, ok := c.processor.createdDeltaHash[id]
 	return deltaHash, ok
 }
 
@@ -103,30 +105,38 @@ func (c *ChunkFile) checkDeltaHash(id, hash string) error {
 func (c *ChunkFile) processDelta(index int, delta did.Delta) error {
 	id := c.processor.deltaMappingArray[index]
 
-	hash, err := delta.Hash()
+	suffixData, isCreate := c.processor.CoreIndexFile.createSuffix[id]
+	if isCreate {
+
+		createOp := api.CreateOperation(suffixData, delta)
+		didOps, err := operations.New(
+			operations.WithMethod(c.processor.method),
+			operations.WithOperations(
+				createOp,
+			),
+		)
+		if err != nil {
+			return fmt.Errorf("could not create new operation: %w", err)
+		}
+
+		opsData, err := didOps.SerializedOps()
+		if err != nil {
+			return fmt.Errorf("could not serialize ops data: %w", err)
+		}
+		if err := c.processor.didStore.PutOps(id, opsData); err != nil {
+			return fmt.Errorf("could not store ops: %w", err)
+		}
+		return nil
+	}
+
+	didOpsB, err := c.processor.didStore.GetOps(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not get operations: %w", err)
 	}
 
-	if err := c.checkDeltaHash(id, hash); err != nil {
-		return err
-	}
-
-	if err := c.processor.setUpdateCommitment(id, delta.UpdateCommitment); err != nil {
-		return fmt.Errorf("failed to set update commitment for %s: %w", id, err)
-	}
-
-	doc, err := c.processor.didStore.Get(id)
+	_, err = api.ParseOps(didOpsB)
 	if err != nil {
-		return fmt.Errorf("failed to get document for %s: %w", id, err)
-	}
-
-	if err := PatchData(c.processor.log, c.processor.prefix, delta, doc); err != nil {
-		return fmt.Errorf("failed to patch data for %s: %w", id, err)
-	}
-
-	if err := c.processor.didStore.Put(doc); err != nil {
-		return fmt.Errorf("failed to put document for %s: %w", id, err)
+		return fmt.Errorf("could not parse ops: %w", err)
 	}
 
 	return nil

@@ -95,6 +95,7 @@ type TestDIDsStorage struct {
 	mu          sync.Mutex
 	dids        map[string]*did.Document
 	deactivated map[string]struct{}
+	ops         map[string][]byte
 }
 
 func (t *TestDIDsStorage) Put(doc *did.Document) error {
@@ -144,6 +145,22 @@ func (t *TestDIDsStorage) List() ([]string, error) {
 		}
 	}
 	return ids, nil
+}
+
+func (t *TestDIDsStorage) PutOps(id string, opsJSON []byte) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.ops[id] = opsJSON
+	return nil
+}
+
+func (t *TestDIDsStorage) GetOps(id string) ([]byte, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if data, ok := t.ops[id]; ok {
+		return data, nil
+	}
+	return nil, fmt.Errorf("no data")
 }
 
 type TestIndexerStorage struct {

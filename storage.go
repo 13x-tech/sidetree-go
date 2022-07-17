@@ -26,6 +26,8 @@ type DIDs interface {
 	Deactivate(id string) error
 	Recover(id string) error
 	Get(id string) (*did.Document, error)
+	PutOps(id string, opsJSON []byte) error
+	GetOps(id string) ([]byte, error)
 }
 
 // TODO: Refactor this to be generalized amongst different anchoring systems

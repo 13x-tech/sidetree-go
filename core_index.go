@@ -25,7 +25,9 @@ type CoreIndexFile struct {
 	WriterLockId        string         `json:"writerLockId,omitempty"`
 	Operations          CoreOperations `json:"operations"`
 
-	suffixMap map[string]struct{}
+	suffixMap    map[string]struct{}
+	createSuffix map[string]did.SuffixData
+
 	processor *OperationsProcessor
 }
 
@@ -39,7 +41,7 @@ func (c *CoreIndexFile) Process() error {
 	c.processor.ProvisionalIndexFileURI = c.ProvisionalIndexURI
 
 	if (len(c.Operations.Deactivate) > 0 || len(c.Operations.Recover) > 0) && c.CoreProofURI == "" {
-		return fmt.Errorf("core proof uri is empty")
+		return fmt.Errorf("has deactivate|recover and core proof uri is empty")
 	} else {
 		c.processor.CoreProofFileURI = c.CoreProofURI
 	}
@@ -48,13 +50,7 @@ func (c *CoreIndexFile) Process() error {
 		return fmt.Errorf("failed to populate core operation storage array: %w", err)
 	}
 
-	if err := c.processCreateOperations(); err != nil {
-		return fmt.Errorf("failed to process create operations: %w", err)
-	}
-
-	// TODO Process Recovery Ops
-	// TODO Process Deactivate Ops
-
+	// TODO Need to Process Create, Recover, Deactivate Ops here?
 	return nil
 }
 
@@ -67,6 +63,7 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 	// its files are to be ignored.
 
 	c.suffixMap = map[string]struct{}{}
+	c.createSuffix = map[string]did.SuffixData{}
 
 	for _, op := range c.Operations.Create {
 		uri, err := op.SuffixData.URI()
@@ -77,8 +74,8 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 		if _, ok := c.suffixMap[uri]; ok {
 			return fmt.Errorf("duplicate operation found in create")
 		}
-
 		c.suffixMap[uri] = struct{}{}
+		c.createSuffix[uri] = op.SuffixData
 	}
 
 	for _, op := range c.Operations.Recover {
@@ -92,27 +89,7 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 		if _, ok := c.suffixMap[op.DIDSuffix]; ok {
 			return fmt.Errorf("duplicate operation found in deactivate")
 		}
-
-		// if err := c.processor.updateDIDOperations(op.DIDSuffix); err != nil {
-		// 	return fmt.Errorf("failed to update did operations: %w", err)
-		// }
-
 		c.suffixMap[op.DIDSuffix] = struct{}{}
-	}
-
-	return nil
-}
-
-func (c *CoreIndexFile) processCreateOperations() error {
-
-	for _, op := range c.Operations.Create {
-		uri, err := op.SuffixData.URI()
-		if err != nil {
-			return fmt.Errorf("failed to get uri: %w", err)
-		}
-		if err := c.processor.createDID(uri, op.SuffixData.RecoveryCommitment); err != nil {
-			return fmt.Errorf("failed to create did: %w", err)
-		}
 	}
 
 	return nil

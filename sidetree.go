@@ -12,7 +12,7 @@ func WithPrefix(prefix string) SidetreeOption {
 		case *SideTree:
 			t.prefix = prefix
 		case *OperationsProcessor:
-			t.prefix = prefix
+			t.method = prefix
 		}
 	}
 }
@@ -37,13 +37,8 @@ func WithStorage(storage Storage) SidetreeOption {
 				return
 			}
 
-			indexStore, err := storage.Indexer()
-			if err != nil {
-				return
-			}
 			t.didStore = didStore
 			t.casStore = casStore
-			t.indexStore = indexStore
 		}
 
 	}

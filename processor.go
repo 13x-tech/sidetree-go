@@ -3,7 +3,7 @@ package sidetree
 import (
 	"fmt"
 
-	"github.com/13x-tech/ion-sdk-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
 func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, error) {
@@ -21,7 +21,7 @@ func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, 
 		option(d)
 	}
 
-	if d.prefix == "" {
+	if d.method == "" {
 		return nil, fmt.Errorf("prefix is empty")
 	}
 
@@ -29,25 +29,17 @@ func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, 
 		return nil, fmt.Errorf("logger is not set")
 	}
 
-	if d.didStore == nil {
-		return nil, fmt.Errorf("did store is not set")
-	}
-
 	if d.casStore == nil {
 		return nil, fmt.Errorf("cas store is not set")
-	}
-
-	if d.indexStore == nil {
-		return nil, fmt.Errorf("index store is not set")
 	}
 
 	return d, nil
 }
 
 type OperationsProcessor struct {
-	prefix string
-	op     SideTreeOp
 	log    Logger
+	method string
+	op     SideTreeOp
 
 	CoreIndexFileURI string
 	CoreIndexFile    *CoreIndexFile
@@ -65,12 +57,15 @@ type OperationsProcessor struct {
 	ChunkFileURI string
 	ChunkFile    *ChunkFile
 
-	didStore   DIDs
-	casStore   CAS
-	indexStore Indexer
+	casStore CAS
+
+	createOps     map[string]operations.CreateInterface
+	updateOps     map[string]operations.UpdateInterface
+	deactivateOps map[string]operations.DeactivateInterface
+	recoverOps    map[string]operations.RecoverInterface
 
 	deltaMappingArray []string
-	createdDelaHash   map[string]string
+	createdDeltaHash  map[string]string
 
 	baseFeeFn   *BaseFeeAlgorithm
 	perOpFeeFn  *PerOperationFee
@@ -273,16 +268,6 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 	return nil
 }
 
-func (d *OperationsProcessor) createDID(id string, recoverCommitment string) error {
-
-	didDoc := d.NewDIDDoc(id, recoverCommitment)
-	if err := d.didStore.Put(didDoc); err != nil {
-		return d.log.Errorf("failed to put did document: %w", err)
-	}
-
-	return nil
-}
-
 func (d *OperationsProcessor) setUpdateCommitment(id string, commitment string) error {
 	didDoc, err := d.didStore.Get(id)
 	if err != nil {
@@ -322,58 +307,24 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		return fmt.Errorf("provisional index file is nil")
 	}
 
-	p.createdDelaHash = map[string]string{}
+	p.createdDeltaHash = map[string]string{}
 	for _, op := range coreIndex.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
 			return fmt.Errorf("failed to get uri from create operation: %w", err)
 		}
 
-		// if err := p.updateDIDOperations(uri); err != nil {
-		// 	return fmt.Errorf("failed to update did operations: %w", err)
-		// }
-
-		p.createdDelaHash[uri] = op.SuffixData.DeltaHash
+		p.createdDeltaHash[uri] = op.SuffixData.DeltaHash
 		p.deltaMappingArray = append(p.deltaMappingArray, uri)
 	}
 
 	for _, op := range coreIndex.Operations.Recover {
-		// if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
-		// 	return fmt.Errorf("failed to update did operations: %w", err)
-		// }
-
 		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
 	}
 
 	for _, op := range provisionalIndex.Operations.Update {
-		// if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
-		// 	return fmt.Errorf("failed to update did operations: %w", err)
-		// }
 		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
 	}
 
 	return nil
-}
-
-// func (p *OperationsProcessor) updateDIDOperations(id string) error {
-
-// 	var err error
-// 	var ops []SideTreeOp
-// 	ops, err = p.indexStore.GetDIDOps(id)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to get did operations: %w", err)
-// 	}
-
-// 	if !OpAlreadyExists(ops, p.op) {
-// 		ops = append(ops, p.op)
-// 		if err := p.indexStore.PutDIDOps(id, ops); err != nil {
-// 			return fmt.Errorf("failed to put did operations: %w", err)
-// 		}
-// 	}
-
-// 	return nil
-// }
-
-func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.Document {
-	return did.New(id, recoveryCommitment, d.prefix, true)
 }
