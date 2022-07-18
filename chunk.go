@@ -47,34 +47,14 @@ func (c *ChunkFile) Process() error {
 	return nil
 }
 
-func (c *ChunkFile) updateDeltaHash(id string) (string, bool) {
-	if c.processor.ProvisionalProofFile == nil {
-		return "", false
-	}
-
-	if c.processor.ProvisionalProofFile.verifiedOps == nil {
-		return "", false
-	}
-
-	deltaHash, ok := c.processor.ProvisionalProofFile.verifiedOps[id]
-	return deltaHash, ok
-}
-
 func (c *ChunkFile) processDelta(index int, delta did.Delta) error {
 	id := c.processor.deltaMappingArray[index]
 
-	createOp, ok := c.processor.createOps[id]
-	if ok {
+	if createOp, ok := c.processor.createOps[id]; ok {
 		createOp.SetDelta(delta)
-	}
-
-	recoverOp, ok := c.processor.recoverOps[id]
-	if ok {
+	} else if recoverOp, ok := c.processor.recoverOps[id]; ok {
 		recoverOp.SetDelta(delta)
-	}
-
-	updateOp, ok := c.processor.updateOps[id]
-	if ok {
+	} else if updateOp, ok := c.processor.updateOps[id]; ok {
 		updateOp.SetDelta(delta)
 	}
 

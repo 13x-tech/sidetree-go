@@ -41,6 +41,8 @@ type OperationsProcessor struct {
 	method string
 	op     SideTreeOp
 
+	storeOps bool
+
 	CoreIndexFileURI string
 	CoreIndexFile    *CoreIndexFile
 
@@ -74,6 +76,16 @@ type OperationsProcessor struct {
 	baseFee int
 }
 
+type ProcessedOperations struct {
+	AnchorString      string
+	AnchorSequence    string
+	CreateOps         map[string]operations.CreateInterface
+	UpdateOps         map[string]operations.UpdateInterface
+	DeactivateOps     map[string]operations.DeactivateInterface
+	RecoverOps        map[string]operations.RecoverInterface
+	DeltaMappingArray []string
+}
+
 func (b *OperationsProcessor) Anchor() string {
 	return b.op.AnchorString
 }
@@ -82,14 +94,14 @@ func (b *OperationsProcessor) SystemAnchor() string {
 	return b.op.SystemAnchorPoint
 }
 
-func (d *OperationsProcessor) Process() error {
+func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 
 	if err := d.fetchCoreIndexFile(); err != nil {
-		return d.log.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
+		return nil, d.log.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
 	}
 
 	if d.CoreIndexFile == nil {
-		return d.log.Errorf("core index: %s - core index file is nil", d.CoreIndexFileURI)
+		return nil, d.log.Errorf("core index: %s - core index file is nil", d.CoreIndexFileURI)
 	}
 
 	// https://identity.foundation/sidetree/spec/#base-fee-variable
@@ -102,7 +114,7 @@ func (d *OperationsProcessor) Process() error {
 	if d.perOpFeeFn != nil {
 		perOpFeeFn := *d.perOpFeeFn
 		if !perOpFeeFn(d.baseFee, d.op.Operations(), d.op.SystemAnchorPoint) {
-			return d.log.Errorf("per op fee is not valid")
+			return nil, d.log.Errorf("per op fee is not valid")
 		}
 	}
 
@@ -110,161 +122,82 @@ func (d *OperationsProcessor) Process() error {
 	if d.valueLockFn != nil {
 		valueLockFn := *d.valueLockFn
 		if !valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, d.op.SystemAnchorPoint) {
-			return d.log.Errorf("value lock is not valid")
+			return nil, d.log.Errorf("value lock is not valid")
 		}
 	}
 
 	if err := d.CoreIndexFile.Process(); err != nil {
-		return d.log.Errorf("core index: %s failed to process core index file: %w", d.CoreIndexFileURI, err)
+		return nil, d.log.Errorf("core index: %s failed to process core index file: %w", d.CoreIndexFileURI, err)
 	}
 
 	if d.CoreProofFileURI != "" {
 
 		if err := d.fetchCoreProofFile(); err != nil {
-			return d.log.Errorf("core index: %s - failed to fetch core proof file: %w", d.CoreIndexFileURI, err)
+			return nil, d.log.Errorf("core index: %s - failed to fetch core proof file: %w", d.CoreIndexFileURI, err)
 		}
 
 		if d.CoreProofFile == nil {
-			return d.log.Errorf("core index: %s - core proof file is nil", d.CoreIndexFileURI)
+			return nil, d.log.Errorf("core index: %s - core proof file is nil", d.CoreIndexFileURI)
 		}
 
 		if err := d.CoreProofFile.Process(); err != nil {
-			return d.log.Errorf("core index: %s - failed to process core proof file: %w", d.CoreIndexFileURI, err)
+			return nil, d.log.Errorf("core index: %s - failed to process core proof file: %w", d.CoreIndexFileURI, err)
 		}
 	}
 
 	if d.ProvisionalIndexFileURI != "" {
 
 		if err := d.fetchProvisionalIndexFile(); err != nil {
-			return d.log.Errorf("core index: %s - failed to fetch provisional index file: %w", d.CoreIndexFileURI, err)
+			return nil, d.log.Errorf("core index: %s - failed to fetch provisional index file: %w", d.CoreIndexFileURI, err)
 		}
 
 		if d.ProvisionalIndexFile == nil {
-			return d.log.Errorf("core index: %s - provisional index file is nil", d.CoreIndexFileURI)
+			return nil, d.log.Errorf("core index: %s - provisional index file is nil", d.CoreIndexFileURI)
 		}
 
 		if err := d.ProvisionalIndexFile.Process(); err != nil {
-			return d.log.Errorf("core index: %s - failed to process provisional index file: %w", d.CoreIndexFileURI, err)
+			return nil, d.log.Errorf("core index: %s - failed to process provisional index file: %w", d.CoreIndexFileURI, err)
 		}
 
 		if len(d.ProvisionalIndexFile.Operations.Update) > 0 {
 
 			if err := d.fetchProvisionalProofFile(); err != nil {
-				return d.log.Errorf("core index: %s - failed to fetch provisional proof file: %w", d.CoreIndexFileURI, err)
+				return nil, d.log.Errorf("core index: %s - failed to fetch provisional proof file: %w", d.CoreIndexFileURI, err)
 			}
 
 			if d.ProvisionalProofFile == nil {
-				return d.log.Errorf("core index: %s - provisional proof file is nil", d.CoreIndexFileURI)
+				return nil, d.log.Errorf("core index: %s - provisional proof file is nil", d.CoreIndexFileURI)
 			}
 
 			if err := d.ProvisionalProofFile.Process(); err != nil {
-				return d.log.Errorf("core index: %s - failed to process provisional proof file: %w", d.CoreIndexFileURI, err)
+				return nil, d.log.Errorf("core index: %s - failed to process provisional proof file: %w", d.CoreIndexFileURI, err)
 			}
 		}
 
 		if len(d.ProvisionalIndexFile.Chunks) > 0 {
 			if err := d.fetchChunkFile(); err != nil {
-				return d.log.Errorf("core index: %s - failed to fetch chunk file: %w", d.CoreIndexFileURI, err)
+				return nil, d.log.Errorf("core index: %s - failed to fetch chunk file: %w", d.CoreIndexFileURI, err)
 			}
 
 			if d.ChunkFile == nil {
-				return d.log.Errorf("core index: %s - chunk file is nil", d.CoreIndexFileURI)
+				return nil, d.log.Errorf("core index: %s - chunk file is nil", d.CoreIndexFileURI)
 			}
 
 			if err := d.ChunkFile.Process(); err != nil {
-				return d.log.Errorf("core index: %s - failed to process chunk file: %w", d.CoreIndexFileURI, err)
+				return nil, d.log.Errorf("core index: %s - failed to process chunk file: %w", d.CoreIndexFileURI, err)
 			}
 		}
 	}
 
-	for _, id := range d.deltaMappingArray {
-
-		didOps, err := d.didStore.GetDIDOps(id)
-		if err != nil {
-			d.log.Debug("core index: %s - failed to get did ops for %s: %s", d.CoreIndexFileURI, id, err)
-			continue
-		}
-
-		ops, err := operations.ParseOps(didOps)
-		if err != nil {
-			d.log.Debug("core index: %s - failed to parse ops for %s: %s\n%s\n\n", d.CoreIndexFileURI, id, err, string(didOps))
-			continue
-		}
-
-		o, err := operations.New(
-			operations.WithMethod(d.method),
-			operations.WithOperations(ops),
-		)
-		if err != nil {
-			d.log.Debug("core index: %s - failed to create operations processor for %s: %s", d.CoreIndexFileURI, id, err)
-			continue
-		}
-
-		createOp, ok := d.createOps[id]
-		if ok {
-			if err := o.Process(createOp); err != nil {
-				d.log.Debug("core index: %s - failed to process create op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-			opBytes, err := createOp.Serialize()
-			if err != nil {
-				d.log.Debug("core index: %s - failed to serialize create op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-			if err := d.didStore.PutDIDOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
-				d.log.Debug("core index: %s - failed to put create op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-
-		} else if recoverOp, ok := d.recoverOps[id]; ok {
-			if err := o.Process(recoverOp); err != nil {
-				d.log.Debug("core index: %s - failed to process recover op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-			opBytes, err := recoverOp.Serialize()
-			if err != nil {
-				d.log.Debug("core index: %s - failed to serialize recover op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-			if err := d.didStore.PutDIDOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
-				d.log.Debug("core index: %s - failed to put recover op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-		} else if updateOp, ok := d.updateOps[id]; ok {
-			if err := o.Process(updateOp); err != nil {
-				d.log.Debug("core index: %s - failed to process update op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-			opBytes, err := updateOp.Serialize()
-			if err != nil {
-				d.log.Debug("core index: %s - failed to serialize update op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-			if err := d.didStore.PutDIDOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
-				d.log.Debug("core index: %s - failed to put update op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-		} else if deactivateOp, ok := d.deactivateOps[id]; ok {
-			if err := o.Process(deactivateOp); err != nil {
-				d.log.Debug("core index: %s - failed to process deactivate op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-			opBytes, err := deactivateOp.Serialize()
-			if err != nil {
-				d.log.Debug("core index: %s - failed to serialize deactivate op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-			if err := d.didStore.PutDIDOp(id, d.Anchor(), d.SystemAnchor(), opBytes); err != nil {
-				d.log.Debug("core index: %s - failed to put deactivate op for %s: %s", d.CoreIndexFileURI, id, err)
-				continue
-			}
-		} else {
-			d.log.Debug("core index: %s - no op for %s", d.CoreIndexFileURI, id)
-			continue
-		}
-	}
-
-	return nil
+	return &ProcessedOperations{
+		AnchorString:      d.Anchor(),
+		AnchorSequence:    d.SystemAnchor(),
+		CreateOps:         d.createOps,
+		RecoverOps:        d.recoverOps,
+		UpdateOps:         d.updateOps,
+		DeactivateOps:     d.deactivateOps,
+		DeltaMappingArray: d.deltaMappingArray,
+	}, nil
 
 }
 

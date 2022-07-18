@@ -14,11 +14,4 @@ type CAS interface {
 type Storage interface {
 	io.Closer
 	CAS() (CAS, error)
-	DIDs() (DIDs, error)
-}
-
-type DIDs interface {
-	io.Closer
-	GetDIDOps(id string) ([]byte, error)
-	PutDIDOp(id, anchor, sequence string, op []byte) error
 }
