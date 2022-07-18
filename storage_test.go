@@ -23,9 +23,6 @@ func NewTestStorage() *TestStorage {
 			indexOps: map[int][]SideTreeOp{},
 			didOps:   map[string][]SideTreeOp{},
 		},
-		dids: &TestDIDsStorage{
-			mu: sync.Mutex{},
-		},
 		cas: &TestCASStorage{
 			cas: map[string][]byte{},
 			mu:  sync.Mutex{},
@@ -36,17 +33,12 @@ func NewTestStorage() *TestStorage {
 type TestStorage struct {
 	Closer
 	index *TestIndexerStorage
-	dids  *TestDIDsStorage
 	cas   *TestCASStorage
 }
 
 // func (t *TestStorage) Indexer() (Indexer, error) {
 // 	return t.index, nil
 // }
-
-func (t *TestStorage) DIDs() (DIDs, error) {
-	return t.dids, nil
-}
 
 func (t *TestStorage) CAS() (CAS, error) {
 	return t.cas, nil

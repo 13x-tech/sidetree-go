@@ -27,17 +27,11 @@ func WithStorage(storage Storage) SidetreeOption {
 		case *SideTree:
 			t.store = storage
 		case *OperationsProcessor:
-			didStore, err := storage.DIDs()
-			if err != nil {
-				return
-			}
-
 			casStore, err := storage.CAS()
 			if err != nil {
 				return
 			}
 
-			t.didStore = didStore
 			t.casStore = casStore
 		}
 
@@ -110,7 +104,9 @@ type SideTree struct {
 	valueLockFn *ValueLocking
 }
 
-func (s *SideTree) ProcessOperations(ops []SideTreeOp) error {
+func (s *SideTree) ProcessOperations(ops []SideTreeOp) (map[SideTreeOp]ProcessedOperations, error) {
+
+	opsMap := map[SideTreeOp]ProcessedOperations{}
 
 	for _, op := range ops {
 		processor, err := Processor(
@@ -120,13 +116,15 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp) error {
 			WithLogger(s.log),
 		)
 		if err != nil {
-			return fmt.Errorf("failed to create operations processor: %w", err)
+			return nil, fmt.Errorf("failed to create operations processor: %w", err)
 		}
 
-		if err := processor.Process(); err != nil {
-			return fmt.Errorf("failed to process operations: %w", err)
+		processed, err := processor.Process()
+		if err != nil {
+			return nil, fmt.Errorf("failed to process operations: %w", err)
 		}
+		opsMap[op] = *processed
 	}
 
-	return nil
+	return opsMap, nil
 }

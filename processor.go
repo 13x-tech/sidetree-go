@@ -60,7 +60,6 @@ type OperationsProcessor struct {
 	ChunkFile    *ChunkFile
 
 	casStore CAS
-	didStore DIDs
 
 	createOps     map[string]operations.CreateInterface
 	updateOps     map[string]operations.UpdateInterface
