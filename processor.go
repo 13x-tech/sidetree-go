@@ -95,6 +95,11 @@ func (b *OperationsProcessor) SystemAnchor() string {
 
 func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 
+	d.createOps = map[string]operations.CreateInterface{}
+	d.updateOps = map[string]operations.UpdateInterface{}
+	d.deactivateOps = map[string]operations.DeactivateInterface{}
+	d.recoverOps = map[string]operations.RecoverInterface{}
+
 	if err := d.fetchCoreIndexFile(); err != nil {
 		return nil, d.log.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
 	}
