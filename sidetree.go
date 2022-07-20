@@ -121,7 +121,8 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp) (map[SideTreeOp]Processed
 
 		processed, err := processor.Process()
 		if err != nil {
-			return nil, fmt.Errorf("failed to process operations: %w", err)
+			s.log.Errorf("failed to process operation: %s", err)
+			// return nil, fmt.Errorf("failed to process operations: %w", err)
 		}
 		opsMap[op] = *processed
 	}

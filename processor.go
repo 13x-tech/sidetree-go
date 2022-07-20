@@ -78,6 +78,7 @@ type OperationsProcessor struct {
 type ProcessedOperations struct {
 	AnchorString      string
 	AnchorSequence    string
+	Error             error
 	CreateOps         map[string]operations.CreateInterface
 	UpdateOps         map[string]operations.UpdateInterface
 	DeactivateOps     map[string]operations.DeactivateInterface
@@ -100,12 +101,21 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 	d.deactivateOps = map[string]operations.DeactivateInterface{}
 	d.recoverOps = map[string]operations.RecoverInterface{}
 
+	ops := &ProcessedOperations{
+		Error:          nil,
+		AnchorString:   d.Anchor(),
+		AnchorSequence: d.SystemAnchor(),
+	}
+
 	if err := d.fetchCoreIndexFile(); err != nil {
-		return nil, d.log.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
+		//TODO Define Errors
+		ops.Error = err
+		return ops, d.log.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
 	}
 
 	if d.CoreIndexFile == nil {
-		return nil, d.log.Errorf("core index: %s - core index file is nil", d.CoreIndexFileURI)
+		ops.Error = fmt.Errorf("core index file is nil")
+		return ops, d.log.Errorf("core index: %s - core index file is nil", d.CoreIndexFileURI)
 	}
 
 	// https://identity.foundation/sidetree/spec/#base-fee-variable
@@ -118,7 +128,8 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 	if d.perOpFeeFn != nil {
 		perOpFeeFn := *d.perOpFeeFn
 		if !perOpFeeFn(d.baseFee, d.op.Operations(), d.op.SystemAnchorPoint) {
-			return nil, d.log.Errorf("per op fee is not valid")
+			ops.Error = fmt.Errorf("per op fee is not valid")
+			return ops, d.log.Errorf("per op fee is not valid")
 		}
 	}
 
@@ -126,74 +137,89 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 	if d.valueLockFn != nil {
 		valueLockFn := *d.valueLockFn
 		if !valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, d.op.SystemAnchorPoint) {
-			return nil, d.log.Errorf("value lock is not valid")
+			ops.Error = fmt.Errorf("value lock is not valid")
+			return ops, d.log.Errorf("value lock is not valid")
 		}
 	}
 
 	if err := d.CoreIndexFile.Process(); err != nil {
-		return nil, d.log.Errorf("core index: %s failed to process core index file: %w", d.CoreIndexFileURI, err)
+		ops.Error = err
+		return ops, d.log.Errorf("core index: %s failed to process core index file: %w", d.CoreIndexFileURI, err)
 	}
 
 	if d.CoreProofFileURI != "" {
 
 		if err := d.fetchCoreProofFile(); err != nil {
-			return nil, d.log.Errorf("core index: %s - failed to fetch core proof file: %w", d.CoreIndexFileURI, err)
+			ops.Error = err
+			return ops, d.log.Errorf("core index: %s - failed to fetch core proof file: %w", d.CoreIndexFileURI, err)
 		}
 
 		if d.CoreProofFile == nil {
-			return nil, d.log.Errorf("core index: %s - core proof file is nil", d.CoreIndexFileURI)
+			ops.Error = fmt.Errorf("core proof file is nil")
+			return ops, d.log.Errorf("core index: %s - core proof file is nil", d.CoreIndexFileURI)
 		}
 
 		if err := d.CoreProofFile.Process(); err != nil {
-			return nil, d.log.Errorf("core index: %s - failed to process core proof file: %w", d.CoreIndexFileURI, err)
+			ops.Error = err
+			return ops, d.log.Errorf("core index: %s - failed to process core proof file: %w", d.CoreIndexFileURI, err)
 		}
 	}
 
 	if d.ProvisionalIndexFileURI != "" {
 
 		if err := d.fetchProvisionalIndexFile(); err != nil {
-			return nil, d.log.Errorf("core index: %s - failed to fetch provisional index file: %w", d.CoreIndexFileURI, err)
+			ops.Error = err
+			return ops, d.log.Errorf("core index: %s - failed to fetch provisional index file: %w", d.CoreIndexFileURI, err)
 		}
 
 		if d.ProvisionalIndexFile == nil {
-			return nil, d.log.Errorf("core index: %s - provisional index file is nil", d.CoreIndexFileURI)
+			ops.Error = fmt.Errorf("provisional index file is nil")
+			return ops, d.log.Errorf("core index: %s - provisional index file is nil", d.CoreIndexFileURI)
 		}
 
 		if err := d.ProvisionalIndexFile.Process(); err != nil {
-			return nil, d.log.Errorf("core index: %s - failed to process provisional index file: %w", d.CoreIndexFileURI, err)
+			ops.Error = err
+			return ops, d.log.Errorf("core index: %s - failed to process provisional index file: %w", d.CoreIndexFileURI, err)
 		}
 
 		if len(d.ProvisionalIndexFile.Operations.Update) > 0 {
 
 			if err := d.fetchProvisionalProofFile(); err != nil {
-				return nil, d.log.Errorf("core index: %s - failed to fetch provisional proof file: %w", d.CoreIndexFileURI, err)
+				ops.Error = err
+				return ops, d.log.Errorf("core index: %s - failed to fetch provisional proof file: %w", d.CoreIndexFileURI, err)
 			}
 
 			if d.ProvisionalProofFile == nil {
-				return nil, d.log.Errorf("core index: %s - provisional proof file is nil", d.CoreIndexFileURI)
+				ops.Error = fmt.Errorf("provisional proof file is nil")) 
+				return ops, d.log.Errorf("core index: %s - provisional proof file is nil", d.CoreIndexFileURI)
 			}
 
 			if err := d.ProvisionalProofFile.Process(); err != nil {
-				return nil, d.log.Errorf("core index: %s - failed to process provisional proof file: %w", d.CoreIndexFileURI, err)
+				ops.Error = err
+				return ops, d.log.Errorf("core index: %s - failed to process provisional proof file: %w", d.CoreIndexFileURI, err)
 			}
 		}
 
 		if len(d.ProvisionalIndexFile.Chunks) > 0 {
 			if err := d.fetchChunkFile(); err != nil {
-				return nil, d.log.Errorf("core index: %s - failed to fetch chunk file: %w", d.CoreIndexFileURI, err)
+				ops.Error = err
+				return ops, d.log.Errorf("core index: %s - failed to fetch chunk file: %w", d.CoreIndexFileURI, err)
 			}
 
 			if d.ChunkFile == nil {
-				return nil, d.log.Errorf("core index: %s - chunk file is nil", d.CoreIndexFileURI)
+				ops.Error = fmt.Errorf("chunk file is nil")
+				return ops, d.log.Errorf("core index: %s - chunk file is nil", d.CoreIndexFileURI)
 			}
 
 			if err := d.ChunkFile.Process(); err != nil {
-				return nil, d.log.Errorf("core index: %s - failed to process chunk file: %w", d.CoreIndexFileURI, err)
+				ops.Error = err
+				return ops, d.log.Errorf("core index: %s - failed to process chunk file: %w", d.CoreIndexFileURI, err)
 			}
 		}
 	}
 
-	return &ProcessedOperations{
+	ops = &ProcessedOperations{
+		Error:             nil,
 		AnchorString:      d.Anchor(),
 		AnchorSequence:    d.SystemAnchor(),
 		CreateOps:         d.createOps,
@@ -201,8 +227,9 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 		UpdateOps:         d.updateOps,
 		DeactivateOps:     d.deactivateOps,
 		DeltaMappingArray: d.deltaMappingArray,
-	}, nil
+	}
 
+	return ops, nil
 }
 
 func (d *OperationsProcessor) fetchCoreIndexFile() error {
