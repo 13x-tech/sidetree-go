@@ -190,7 +190,7 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 			}
 
 			if d.ProvisionalProofFile == nil {
-				ops.Error = fmt.Errorf("provisional proof file is nil")) 
+				ops.Error = fmt.Errorf("provisional proof file is nil")
 				return ops, d.log.Errorf("core index: %s - provisional proof file is nil", d.CoreIndexFileURI)
 			}
 
