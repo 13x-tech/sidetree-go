@@ -40,6 +40,7 @@ type OperationsProcessor struct {
 	log    Logger
 	method string
 	op     SideTreeOp
+	dids   []string
 
 	storeOps bool
 
@@ -76,14 +77,13 @@ type OperationsProcessor struct {
 }
 
 type ProcessedOperations struct {
-	AnchorString      string
-	AnchorSequence    string
-	Error             error
-	CreateOps         map[string]operations.CreateInterface
-	UpdateOps         map[string]operations.UpdateInterface
-	DeactivateOps     map[string]operations.DeactivateInterface
-	RecoverOps        map[string]operations.RecoverInterface
-	DeltaMappingArray []string
+	AnchorString   string
+	AnchorSequence string
+	Error          error
+	CreateOps      map[string]operations.CreateInterface
+	UpdateOps      map[string]operations.UpdateInterface
+	DeactivateOps  map[string]operations.DeactivateInterface
+	RecoverOps     map[string]operations.RecoverInterface
 }
 
 func (b *OperationsProcessor) Anchor() string {
@@ -219,17 +219,76 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 	}
 
 	ops = &ProcessedOperations{
-		Error:             nil,
-		AnchorString:      d.Anchor(),
-		AnchorSequence:    d.SystemAnchor(),
-		CreateOps:         d.createOps,
-		RecoverOps:        d.recoverOps,
-		UpdateOps:         d.updateOps,
-		DeactivateOps:     d.deactivateOps,
-		DeltaMappingArray: d.deltaMappingArray,
+		Error:          nil,
+		AnchorString:   d.Anchor(),
+		AnchorSequence: d.SystemAnchor(),
+		CreateOps:      d.CreateOps(),
+		RecoverOps:     d.RecoverOps(),
+		UpdateOps:      d.UpdateOps(),
+		DeactivateOps:  d.DeactivateOps(),
 	}
 
 	return ops, nil
+}
+
+func (d *OperationsProcessor) CreateOps() map[string]operations.CreateInterface {
+	if len(d.dids) == 0 {
+		return d.createOps
+	}
+
+	ops := map[string]operations.CreateInterface{}
+	for _, did := range d.dids {
+		if _, ok := d.createOps[did]; ok {
+			ops[did] = d.createOps[did]
+		}
+	}
+
+	return ops
+}
+
+func (d *OperationsProcessor) RecoverOps() map[string]operations.RecoverInterface {
+	if len(d.dids) == 0 {
+		return d.recoverOps
+	}
+
+	ops := map[string]operations.RecoverInterface{}
+	for _, did := range d.dids {
+		if _, ok := d.recoverOps[did]; ok {
+			ops[did] = d.recoverOps[did]
+		}
+	}
+
+	return ops
+}
+
+func (d *OperationsProcessor) UpdateOps() map[string]operations.UpdateInterface {
+	if len(d.dids) == 0 {
+		return d.updateOps
+	}
+
+	ops := map[string]operations.UpdateInterface{}
+	for _, did := range d.dids {
+		if _, ok := d.updateOps[did]; ok {
+			ops[did] = d.updateOps[did]
+		}
+	}
+
+	return ops
+}
+
+func (d *OperationsProcessor) DeactivateOps() map[string]operations.DeactivateInterface {
+	if len(d.dids) == 0 {
+		return d.deactivateOps
+	}
+
+	ops := map[string]operations.DeactivateInterface{}
+	for _, did := range d.dids {
+		if _, ok := d.deactivateOps[did]; ok {
+			ops[did] = d.deactivateOps[did]
+		}
+	}
+
+	return ops
 }
 
 func (d *OperationsProcessor) fetchCoreIndexFile() error {

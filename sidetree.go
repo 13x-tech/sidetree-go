@@ -6,6 +6,16 @@ import (
 
 type SidetreeOption func(interface{})
 
+func WithDIDs(dids []string) SidetreeOption {
+	return func(d interface{}) {
+		switch t := d.(type) {
+		case *SideTree:
+		case *OperationsProcessor:
+			t.dids = dids
+		}
+	}
+}
+
 func WithPrefix(prefix string) SidetreeOption {
 	return func(d interface{}) {
 		switch t := d.(type) {
@@ -104,10 +114,11 @@ type SideTree struct {
 	valueLockFn *ValueLocking
 }
 
-func (s *SideTree) ProcessOperations(ops []SideTreeOp) (map[SideTreeOp]ProcessedOperations, error) {
+func (s *SideTree) ProcessOperations(ops []SideTreeOp, ids []string) (map[SideTreeOp]ProcessedOperations, error) {
+
+	//TODO Validate ids
 
 	opsMap := map[SideTreeOp]ProcessedOperations{}
-
 	for _, op := range ops {
 		processor, err := Processor(
 			op,
