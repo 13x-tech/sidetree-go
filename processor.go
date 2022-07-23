@@ -33,6 +33,10 @@ func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, 
 		return nil, fmt.Errorf("cas store is not set")
 	}
 
+	if d.dids == nil {
+		d.dids = []string{}
+	}
+
 	return d, nil
 }
 

@@ -10,6 +10,7 @@ func WithDIDs(dids []string) SidetreeOption {
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
+			return
 		case *OperationsProcessor:
 			t.dids = dids
 		}
@@ -125,6 +126,7 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp, ids []string) (map[SideTr
 			WithPrefix(s.method),
 			WithStorage(s.store),
 			WithLogger(s.log),
+			WithDIDs(ids),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create operations processor: %w", err)
