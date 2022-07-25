@@ -60,14 +60,17 @@ func (p *ProvisionalIndexFile) Process() error {
 func (p *ProvisionalIndexFile) processRevealValues() error {
 
 	if len(p.Operations.Update) == 0 {
+		fmt.Println("No Updates")
 		return nil
 	}
 
 	p.revealValues = map[string]string{}
 
 	for _, op := range p.Operations.Update {
+		fmt.Printf("Setting Reveal For %s\n", op.DIDSuffix)
 		p.revealValues[op.DIDSuffix] = op.RevealValue
 	}
+
 	return nil
 }
 
