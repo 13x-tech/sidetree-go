@@ -84,6 +84,10 @@ type OperationsProcessor struct {
 
 func (d *OperationsProcessor) Process() error {
 
+	d.createMappingArray = []string{}
+	d.recoveryMappingArray = []string{}
+	d.updateMappingArray = []string{}
+
 	if err := d.fetchCoreIndexFile(); err != nil {
 		return d.log.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
 	}
