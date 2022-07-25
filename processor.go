@@ -71,7 +71,11 @@ type OperationsProcessor struct {
 	deactivateOps map[string]operations.DeactivateInterface
 	recoverOps    map[string]operations.RecoverInterface
 
-	deltaMappingArray []string
+	createdDeltaHash map[string]string
+
+	createMappingArray   []string
+	recoveryMappingArray []string
+	updateMappingArray   []string
 
 	baseFeeFn   *BaseFeeAlgorithm
 	perOpFeeFn  *PerOperationFee
@@ -99,6 +103,10 @@ func (b *OperationsProcessor) SystemAnchor() string {
 }
 
 func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
+
+	d.createMappingArray = []string{}
+	d.recoveryMappingArray = []string{}
+	d.updateMappingArray = []string{}
 
 	d.createOps = map[string]operations.CreateInterface{}
 	d.updateOps = map[string]operations.UpdateInterface{}
@@ -400,6 +408,7 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		return fmt.Errorf("provisional index file is nil")
 	}
 
+	p.createdDeltaHash = map[string]string{}
 	for _, op := range coreIndex.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
@@ -413,18 +422,16 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		)
 
 		p.createOps[uri] = createOp
-		fmt.Printf("adding to delta mapping create: %s\n", uri)
-		p.deltaMappingArray = append(p.deltaMappingArray, uri)
+		p.createdDeltaHash[uri] = op.SuffixData.DeltaHash
+		p.createMappingArray = append(p.createMappingArray, uri)
 	}
 
 	for _, op := range coreIndex.Operations.Recover {
-		fmt.Printf("adding to delta mapping recover: %s\n", op.DIDSuffix)
-		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
+		p.recoveryMappingArray = append(p.recoveryMappingArray, op.DIDSuffix)
 	}
 
 	for _, op := range provisionalIndex.Operations.Update {
-		fmt.Printf("adding to delta mapping update: %s\n", op.DIDSuffix)
-		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
+		p.updateMappingArray = append(p.updateMappingArray, op.DIDSuffix)
 	}
 
 	return nil
