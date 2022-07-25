@@ -69,8 +69,11 @@ type OperationsProcessor struct {
 	casStore   CAS
 	indexStore Indexer
 
-	deltaMappingArray []string
-	createdDelaHash   map[string]string
+	createdDeltaHash map[string]string
+
+	createMappingArray   []string
+	recoveryMappingArray []string
+	updateMappingArray   []string
 
 	baseFeeFn   *BaseFeeAlgorithm
 	perOpFeeFn  *PerOperationFee
@@ -322,7 +325,7 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		return fmt.Errorf("provisional index file is nil")
 	}
 
-	p.createdDelaHash = map[string]string{}
+	p.createdDeltaHash = map[string]string{}
 	for _, op := range coreIndex.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
@@ -333,8 +336,8 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 			return fmt.Errorf("failed to update did operations: %w", err)
 		}
 
-		p.createdDelaHash[uri] = op.SuffixData.DeltaHash
-		p.deltaMappingArray = append(p.deltaMappingArray, uri)
+		p.createdDeltaHash[uri] = op.SuffixData.DeltaHash
+		p.createMappingArray = append(p.createMappingArray, uri)
 	}
 
 	for _, op := range coreIndex.Operations.Recover {
@@ -342,14 +345,14 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 			return fmt.Errorf("failed to update did operations: %w", err)
 		}
 
-		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
+		p.recoveryMappingArray = append(p.recoveryMappingArray, op.DIDSuffix)
 	}
 
 	for _, op := range provisionalIndex.Operations.Update {
 		if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
 			return fmt.Errorf("failed to update did operations: %w", err)
 		}
-		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
+		p.updateMappingArray = append(p.updateMappingArray, op.DIDSuffix)
 	}
 
 	return nil

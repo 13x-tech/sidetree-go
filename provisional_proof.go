@@ -27,8 +27,8 @@ func (p *ProvisionalProofFile) Process() error {
 
 	if len(p.Operations.Update) == len(p.processor.ProvisionalIndexFile.Operations.Update) {
 
-		if len(p.processor.deltaMappingArray) < len(p.Operations.Update) {
-			return fmt.Errorf("operation mapping array contains less entries than update entries")
+		if len(p.processor.updateMappingArray) < len(p.Operations.Update) {
+			return fmt.Errorf("update operation mapping array contains less entries than update entries")
 		}
 
 		p.verifiedOps = map[string]string{}
@@ -52,7 +52,7 @@ func (p *ProvisionalProofFile) Process() error {
 }
 
 func (p *ProvisionalProofFile) processUpdate(index int, update SignedUpdateDataOp) error {
-	id := p.processor.deltaMappingArray[index]
+	id := p.processor.updateMappingArray[index]
 
 	revealValue, ok := p.processor.ProvisionalIndexFile.revealValues[id]
 	if !ok {
