@@ -413,14 +413,17 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		)
 
 		p.createOps[uri] = createOp
+		fmt.Printf("adding to delta mapping create: %s\n", uri)
 		p.deltaMappingArray = append(p.deltaMappingArray, uri)
 	}
 
 	for _, op := range coreIndex.Operations.Recover {
+		fmt.Printf("adding to delta mapping recover: %s\n", op.DIDSuffix)
 		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
 	}
 
 	for _, op := range provisionalIndex.Operations.Update {
+		fmt.Printf("adding to delta mapping update: %s\n", op.DIDSuffix)
 		p.deltaMappingArray = append(p.deltaMappingArray, op.DIDSuffix)
 	}
 
