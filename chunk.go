@@ -33,13 +33,24 @@ func (c *ChunkFile) Process() error {
 	// Core Index File Create Entries, Core Index File Recovery Entries,
 	// Provisional Index File Update Entries into a single array, in that order,
 	// herein referred to as the Operation Delta Mapping Array
+	var mappingArray []string
+	if len(c.processor.createMappingArray) > 0 {
+		mappingArray = append(mappingArray, c.processor.createMappingArray...)
+	}
+	if len(c.processor.recoveryMappingArray) > 0 {
+		mappingArray = append(mappingArray, c.processor.recoveryMappingArray...)
+	}
+	if len(c.processor.updateMappingArray) > 0 {
+		mappingArray = append(mappingArray, c.processor.updateMappingArray...)
+	}
 
-	if len(c.processor.deltaMappingArray) > len(c.Deltas) {
+	if len(mappingArray) > len(c.Deltas) {
 		return fmt.Errorf("operation mapping array contains more entries than delta entries")
 	}
 
 	for i, delta := range c.Deltas {
-		if err := c.processDelta(i, delta); err != nil {
+		id := mappingArray[i]
+		if err := c.processDelta(id, delta); err != nil {
 			c.processor.log.Errorf("core index: %s - failed to process delta: %w", c.processor.CoreIndexFileURI, err)
 		}
 	}
@@ -48,11 +59,11 @@ func (c *ChunkFile) Process() error {
 }
 
 func (c *ChunkFile) createdDeltaHash(id string) (string, bool) {
-	if c.processor.createdDelaHash == nil {
+	if c.processor.createdDeltaHash == nil {
 		return "", false
 	}
 
-	deltaHash, ok := c.processor.createdDelaHash[id]
+	deltaHash, ok := c.processor.createdDeltaHash[id]
 	return deltaHash, ok
 }
 
@@ -100,9 +111,7 @@ func (c *ChunkFile) checkDeltaHash(id, hash string) error {
 	return nil
 }
 
-func (c *ChunkFile) processDelta(index int, delta did.Delta) error {
-	id := c.processor.deltaMappingArray[index]
-
+func (c *ChunkFile) processDelta(id string, delta did.Delta) error {
 	hash, err := delta.Hash()
 	if err != nil {
 		return err
