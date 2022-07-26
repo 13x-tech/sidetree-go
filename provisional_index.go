@@ -38,9 +38,7 @@ func (p *ProvisionalIndexFile) Process() error {
 		return fmt.Errorf("failed to populate core operation storage array: %w", err)
 	}
 
-	if err := p.processRevealValues(); err != nil {
-		return fmt.Errorf("failed to process reveal values: %w", err)
-	}
+	p.setRevealValues()
 
 	// Version 1 of SideTree only contains a single chunk in the chunks array
 	if len(p.Chunks) != 1 {
@@ -57,26 +55,18 @@ func (p *ProvisionalIndexFile) Process() error {
 	return nil
 }
 
-func (p *ProvisionalIndexFile) processRevealValues() error {
-
-	if len(p.Operations.Update) == 0 {
-		return nil
-	}
-
+func (p *ProvisionalIndexFile) setRevealValues() {
 	p.revealValues = map[string]string{}
-
 	for _, op := range p.Operations.Update {
 		p.revealValues[op.DIDSuffix] = op.RevealValue
 	}
-
-	return nil
 }
 
 func (p *ProvisionalIndexFile) populateCoreOperationArray() error {
 
 	for _, op := range p.Operations.Update {
 		if _, ok := p.processor.CoreIndexFile.suffixMap[op.DIDSuffix]; ok {
-			return fmt.Errorf("duplicate operation found in recover")
+			return ErrDuplicateOperation
 		}
 
 		p.processor.CoreIndexFile.suffixMap[op.DIDSuffix] = struct{}{}

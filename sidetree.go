@@ -116,6 +116,7 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp, ids []string) (map[SideTr
 
 	opsMap := map[SideTreeOp]ProcessedOperations{}
 	for _, op := range ops {
+
 		processor, err := Processor(
 			op,
 			WithPrefix(s.method),
@@ -127,11 +128,7 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp, ids []string) (map[SideTr
 			return nil, fmt.Errorf("failed to create operations processor: %w", err)
 		}
 
-		processed, err := processor.Process()
-		if err != nil {
-			s.log.Infof("failed to process operation %s: %s", processed.AnchorString, err)
-		}
-		opsMap[op] = *processed
+		opsMap[op] = processor.Process()
 	}
 
 	return opsMap, nil

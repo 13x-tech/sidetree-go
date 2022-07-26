@@ -36,14 +36,7 @@ func (p *ProvisionalProofFile) Process() error {
 		p.verifiedOps = map[string]string{}
 
 		for i, op := range p.Operations.Update {
-			if err := p.processUpdate(i, op); err != nil {
-				p.processor.log.Errorf(
-					"core index: %s - failed to process provisional proof operation %d: %w",
-					p.processor.CoreIndexFileURI,
-					i,
-					err,
-				)
-			}
+			p.setUpdateOp(i, op)
 		}
 
 	} else {
@@ -53,24 +46,22 @@ func (p *ProvisionalProofFile) Process() error {
 	return nil
 }
 
-func (p *ProvisionalProofFile) processUpdate(index int, update SignedUpdateDataOp) error {
+func (p *ProvisionalProofFile) setUpdateOp(index int, update SignedUpdateDataOp) {
 	id := p.processor.updateMappingArray[index]
 
 	reveal, ok := p.processor.ProvisionalIndexFile.revealValues[id]
 	if !ok {
-		return fmt.Errorf("failed to find reveal value for %s", id)
+		p.processor.log.Errorf("core index: %s - failed to find reveal value for id %s", p.processor.CoreIndexFileURI, id)
+		return
 	}
 
-	op := operations.UpdateOperation(
+	p.processor.updateOps[id] = operations.UpdateOperation(
 		p.processor.Anchor(),
 		p.processor.SystemAnchor(),
 		id,
 		reveal,
 		update.SignedData,
 	)
-	p.processor.updateOps[id] = op
-
-	return nil
 }
 
 type PorvProofOperations struct {

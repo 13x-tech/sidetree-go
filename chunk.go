@@ -50,16 +50,13 @@ func (c *ChunkFile) Process() error {
 
 	for i, delta := range c.Deltas {
 		id := mappingArray[i]
-		if err := c.processDelta(id, delta); err != nil {
-			c.processor.log.Errorf("core index: %s - failed to process delta: %w", c.processor.CoreIndexFileURI, err)
-		}
+		c.setDelta(id, delta)
 	}
 
 	return nil
 }
 
-func (c *ChunkFile) processDelta(id string, delta did.Delta) error {
-
+func (c *ChunkFile) setDelta(id string, delta did.Delta) {
 	if createOp, ok := c.processor.createOps[id]; ok {
 		createOp.SetDelta(delta)
 	} else if recoverOp, ok := c.processor.recoverOps[id]; ok {
@@ -67,6 +64,4 @@ func (c *ChunkFile) processDelta(id string, delta did.Delta) error {
 	} else if updateOp, ok := c.processor.updateOps[id]; ok {
 		updateOp.SetDelta(delta)
 	}
-
-	return nil
 }

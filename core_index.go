@@ -40,13 +40,12 @@ func (c *CoreIndexFile) Process() error {
 	c.processor.ProvisionalIndexFileURI = c.ProvisionalIndexURI
 
 	if (len(c.Operations.Deactivate) > 0 || len(c.Operations.Recover) > 0) && c.CoreProofURI == "" {
-		return fmt.Errorf("has deactivate|recover and core proof uri is empty")
-	} else {
-		c.processor.CoreProofFileURI = c.CoreProofURI
+		return ErrNoCoreProof
 	}
+	c.processor.CoreProofFileURI = c.CoreProofURI
 
 	if err := c.populateCoreOperationArray(); err != nil {
-		return fmt.Errorf("failed to populate core operation storage array: %w", err)
+		return fmt.Errorf("failed to populate core operations array: %w", err)
 	}
 
 	// TODO Need to Process Create, Recover, Deactivate Ops here?
@@ -66,25 +65,25 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 	for _, op := range c.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
-			return fmt.Errorf("failed to get uri: %w", err)
+			return ErrURINotFound
 		}
 
 		if _, ok := c.suffixMap[uri]; ok {
-			return fmt.Errorf("duplicate operation found in create")
+			return ErrDuplicateOperation
 		}
 		c.suffixMap[uri] = struct{}{}
 	}
 
 	for _, op := range c.Operations.Recover {
 		if _, ok := c.suffixMap[op.DIDSuffix]; ok {
-			return fmt.Errorf("duplicate operation found in recover")
+			return ErrDuplicateOperation
 		}
 		c.suffixMap[op.DIDSuffix] = struct{}{}
 	}
 
 	for _, op := range c.Operations.Deactivate {
 		if _, ok := c.suffixMap[op.DIDSuffix]; ok {
-			return fmt.Errorf("duplicate operation found in deactivate")
+			return ErrDuplicateOperation
 		}
 		c.suffixMap[op.DIDSuffix] = struct{}{}
 	}

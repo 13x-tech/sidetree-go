@@ -41,10 +41,11 @@ func Processor(op SideTreeOp, options ...SideTreeOption) (*OperationsProcessor, 
 }
 
 type OperationsProcessor struct {
+	cas        CAS
+	filterDIDs []string
 	log        Logger
 	method     string
 	op         SideTreeOp
-	filterDIDs []string
 
 	CoreIndexFileURI string
 	CoreIndexFile    *CoreIndexFile
@@ -62,19 +63,16 @@ type OperationsProcessor struct {
 	ChunkFileURI string
 	ChunkFile    *ChunkFile
 
-	cas CAS
-
 	createOps     map[string]operations.CreateInterface
 	updateOps     map[string]operations.UpdateInterface
 	deactivateOps map[string]operations.DeactivateInterface
 	recoverOps    map[string]operations.RecoverInterface
 
-	createdDeltaHash map[string]string
-
 	createMappingArray   []string
 	recoveryMappingArray []string
 	updateMappingArray   []string
 
+	//TODO These Don't actually do Anything Yet
 	baseFeeFn   *BaseFeeAlgorithm
 	perOpFeeFn  *PerOperationFee
 	valueLockFn *ValueLocking
@@ -100,7 +98,7 @@ func (b *OperationsProcessor) SystemAnchor() string {
 	return b.op.SystemAnchorPoint
 }
 
-func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
+func (d *OperationsProcessor) Process() ProcessedOperations {
 
 	d.createMappingArray = []string{}
 	d.recoveryMappingArray = []string{}
@@ -111,7 +109,7 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 	d.deactivateOps = map[string]operations.DeactivateInterface{}
 	d.recoverOps = map[string]operations.RecoverInterface{}
 
-	ops := &ProcessedOperations{
+	ops := ProcessedOperations{
 		Error:          nil,
 		AnchorString:   d.Anchor(),
 		AnchorSequence: d.SystemAnchor(),
@@ -120,12 +118,12 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 	if err := d.fetchCoreIndexFile(); err != nil {
 		//TODO Define Errors
 		ops.Error = err
-		return ops, d.log.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
+		return ops
 	}
 
 	if d.CoreIndexFile == nil {
 		ops.Error = fmt.Errorf("core index file is nil")
-		return ops, d.log.Errorf("core index: %s - core index file is nil", d.CoreIndexFileURI)
+		return ops
 	}
 
 	// https://identity.foundation/sidetree/spec/#base-fee-variable
@@ -139,7 +137,7 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 		perOpFeeFn := *d.perOpFeeFn
 		if !perOpFeeFn(d.baseFee, d.op.Operations(), d.op.SystemAnchorPoint) {
 			ops.Error = fmt.Errorf("per op fee is not valid")
-			return ops, d.log.Errorf("per op fee is not valid")
+			return ops
 		}
 	}
 
@@ -148,30 +146,30 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 		valueLockFn := *d.valueLockFn
 		if !valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, d.op.SystemAnchorPoint) {
 			ops.Error = fmt.Errorf("value lock is not valid")
-			return ops, d.log.Errorf("value lock is not valid")
+			return ops
 		}
 	}
 
 	if err := d.CoreIndexFile.Process(); err != nil {
 		ops.Error = err
-		return ops, d.log.Errorf("core index: %s failed to process core index file: %w", d.CoreIndexFileURI, err)
+		return ops
 	}
 
 	if d.CoreProofFileURI != "" {
 
 		if err := d.fetchCoreProofFile(); err != nil {
 			ops.Error = err
-			return ops, d.log.Errorf("core index: %s - failed to fetch core proof file: %w", d.CoreIndexFileURI, err)
+			return ops
 		}
 
 		if d.CoreProofFile == nil {
 			ops.Error = fmt.Errorf("core proof file is nil")
-			return ops, d.log.Errorf("core index: %s - core proof file is nil", d.CoreIndexFileURI)
+			return ops
 		}
 
 		if err := d.CoreProofFile.Process(); err != nil {
 			ops.Error = err
-			return ops, d.log.Errorf("core index: %s - failed to process core proof file: %w", d.CoreIndexFileURI, err)
+			return ops
 		}
 	}
 
@@ -179,56 +177,62 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 
 		if err := d.fetchProvisionalIndexFile(); err != nil {
 			ops.Error = err
-			return ops, d.log.Errorf("core index: %s - failed to fetch provisional index file: %w", d.CoreIndexFileURI, err)
+			return ops
 		}
 
 		if d.ProvisionalIndexFile == nil {
 			ops.Error = fmt.Errorf("provisional index file is nil")
-			return ops, d.log.Errorf("core index: %s - provisional index file is nil", d.CoreIndexFileURI)
+			return ops
 		}
 
 		if err := d.ProvisionalIndexFile.Process(); err != nil {
 			ops.Error = err
-			return ops, d.log.Errorf("core index: %s - failed to process provisional index file: %w", d.CoreIndexFileURI, err)
+			return ops
 		}
 
 		if len(d.ProvisionalIndexFile.Operations.Update) > 0 {
 
 			if err := d.fetchProvisionalProofFile(); err != nil {
 				ops.Error = err
-				return ops, d.log.Errorf("core index: %s - failed to fetch provisional proof file: %w", d.CoreIndexFileURI, err)
+				return ops
 			}
 
 			if d.ProvisionalProofFile == nil {
 				ops.Error = fmt.Errorf("provisional proof file is nil")
-				return ops, d.log.Errorf("core index: %s - provisional proof file is nil", d.CoreIndexFileURI)
+				return ops
 			}
 
 			if err := d.ProvisionalProofFile.Process(); err != nil {
 				ops.Error = err
-				return ops, d.log.Errorf("core index: %s - failed to process provisional proof file: %w", d.CoreIndexFileURI, err)
+				return ops
 			}
 		}
 
 		if len(d.ProvisionalIndexFile.Chunks) > 0 {
 			if err := d.fetchChunkFile(); err != nil {
 				ops.Error = err
-				return ops, d.log.Errorf("core index: %s - failed to fetch chunk file: %w", d.CoreIndexFileURI, err)
+				return ops
 			}
 
 			if d.ChunkFile == nil {
 				ops.Error = fmt.Errorf("chunk file is nil")
-				return ops, d.log.Errorf("core index: %s - chunk file is nil", d.CoreIndexFileURI)
+				return ops
 			}
 
 			if err := d.ChunkFile.Process(); err != nil {
 				ops.Error = err
-				return ops, d.log.Errorf("core index: %s - failed to process chunk file: %w", d.CoreIndexFileURI, err)
+				return ops
 			}
 		}
 	}
 
-	ops = &ProcessedOperations{
+	//Check for duplicate dids file invalid if duplicates exist
+	if d.hasDuplicateDIDs() {
+		ops.Error = fmt.Errorf("duplicate dids found")
+		return ops
+	}
+
+	return ProcessedOperations{
 		Error:          nil,
 		AnchorString:   d.Anchor(),
 		AnchorSequence: d.SystemAnchor(),
@@ -237,8 +241,37 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 		UpdateOps:      d.UpdateOps(),
 		DeactivateOps:  d.DeactivateOps(),
 	}
+}
 
-	return ops, nil
+func (d *OperationsProcessor) hasDuplicateDIDs() bool {
+	dids := make(map[string]struct{})
+	for _, id := range d.createMappingArray {
+		if _, ok := dids[id]; ok {
+			return true
+		}
+		dids[id] = struct{}{}
+	}
+	for _, id := range d.updateMappingArray {
+		if _, ok := dids[id]; ok {
+			return true
+		}
+		dids[id] = struct{}{}
+	}
+	for _, id := range d.recoveryMappingArray {
+		if _, ok := dids[id]; ok {
+			return true
+		}
+		dids[id] = struct{}{}
+	}
+
+	for id, _ := range d.deactivateOps {
+		if _, ok := dids[id]; ok {
+			return true
+		}
+		dids[id] = struct{}{}
+	}
+
+	return false
 }
 
 func (d *OperationsProcessor) CreateOps() map[string]operations.CreateInterface {
@@ -406,7 +439,6 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		return fmt.Errorf("provisional index file is nil")
 	}
 
-	p.createdDeltaHash = map[string]string{}
 	for _, op := range coreIndex.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
@@ -420,7 +452,6 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		)
 
 		p.createOps[uri] = createOp
-		p.createdDeltaHash[uri] = op.SuffixData.DeltaHash
 		p.createMappingArray = append(p.createMappingArray, uri)
 	}
 

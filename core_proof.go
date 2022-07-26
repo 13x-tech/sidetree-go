@@ -34,57 +34,35 @@ func (p *CoreProofFile) Process() error {
 
 	for i, op := range p.Operations.Recover {
 		coreOp := p.processor.CoreIndexFile.Operations.Recover[i]
-		if err := p.processRecover(coreOp.DIDSuffix, coreOp.RevealValue, op); err != nil {
-			p.processor.log.Errorf(
-				"core index: %s - failed to process core proof recovery operation for %s: %w",
-				p.processor.CoreIndexFileURI,
-				coreOp.DIDSuffix,
-				err,
-			)
-		}
+		p.setRecoverOp(coreOp.DIDSuffix, coreOp.RevealValue, op)
 	}
 
 	for i, op := range p.Operations.Deactivate {
 		coreOp := p.processor.CoreIndexFile.Operations.Deactivate[i]
-		if err := p.processDeactivate(coreOp.DIDSuffix, coreOp.RevealValue, op); err != nil {
-			p.processor.log.Errorf(
-				"core index: %s - failed to process core proof deactivate operation for %s: %w",
-				p.processor.CoreIndexFileURI,
-				coreOp.DIDSuffix,
-				err,
-			)
-		}
+		p.setDeactivateOp(coreOp.DIDSuffix, coreOp.RevealValue, op)
 	}
 
 	return nil
 }
 
-func (p *CoreProofFile) processDeactivate(id string, revealValue string, op SignedDeactivateDataOp) error {
-	deactivate := operations.DeactivateOperation(
+func (p *CoreProofFile) setDeactivateOp(id string, revealValue string, op SignedDeactivateDataOp) {
+	p.processor.deactivateOps[id] = operations.DeactivateOperation(
 		p.processor.Anchor(),
 		p.processor.SystemAnchor(),
 		id,
 		revealValue,
 		op.SignedData,
 	)
-	p.processor.deactivateOps[id] = deactivate
-
-	//TODO Process this Deactivate Here
-
-	return nil
 }
 
-func (p *CoreProofFile) processRecover(id string, revealValue string, op SignedRecoverDataOp) error {
-	recover := operations.RecoverOperation(
+func (p *CoreProofFile) setRecoverOp(id string, revealValue string, op SignedRecoverDataOp) {
+	p.processor.recoverOps[id] = operations.RecoverOperation(
 		p.processor.Anchor(),
 		p.processor.SystemAnchor(),
 		id,
 		revealValue,
 		op.SignedData,
 	)
-	p.processor.recoverOps[id] = recover
-
-	return nil
 }
 
 type CoreProofOperations struct {
