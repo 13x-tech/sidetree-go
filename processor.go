@@ -6,7 +6,7 @@ import (
 	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
-func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, error) {
+func Processor(op SideTreeOp, options ...SideTreeOption) (*OperationsProcessor, error) {
 
 	if op.CID() == "" {
 		return nil, fmt.Errorf("index URI is empty")
@@ -29,24 +29,22 @@ func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, 
 		return nil, fmt.Errorf("logger is not set")
 	}
 
-	if d.casStore == nil {
+	if d.cas == nil {
 		return nil, fmt.Errorf("cas store is not set")
 	}
 
-	if d.dids == nil {
-		d.dids = []string{}
+	if d.filterDIDs == nil {
+		d.filterDIDs = []string{}
 	}
 
 	return d, nil
 }
 
 type OperationsProcessor struct {
-	log    Logger
-	method string
-	op     SideTreeOp
-	dids   []string
-
-	storeOps bool
+	log        Logger
+	method     string
+	op         SideTreeOp
+	filterDIDs []string
 
 	CoreIndexFileURI string
 	CoreIndexFile    *CoreIndexFile
@@ -64,7 +62,7 @@ type OperationsProcessor struct {
 	ChunkFileURI string
 	ChunkFile    *ChunkFile
 
-	casStore CAS
+	cas CAS
 
 	createOps     map[string]operations.CreateInterface
 	updateOps     map[string]operations.UpdateInterface
@@ -244,12 +242,12 @@ func (d *OperationsProcessor) Process() (*ProcessedOperations, error) {
 }
 
 func (d *OperationsProcessor) CreateOps() map[string]operations.CreateInterface {
-	if len(d.dids) == 0 {
+	if len(d.filterDIDs) == 0 {
 		return d.createOps
 	}
 
 	ops := map[string]operations.CreateInterface{}
-	for _, did := range d.dids {
+	for _, did := range d.filterDIDs {
 		if _, ok := d.createOps[did]; ok {
 			ops[did] = d.createOps[did]
 		}
@@ -259,12 +257,12 @@ func (d *OperationsProcessor) CreateOps() map[string]operations.CreateInterface 
 }
 
 func (d *OperationsProcessor) RecoverOps() map[string]operations.RecoverInterface {
-	if len(d.dids) == 0 {
+	if len(d.filterDIDs) == 0 {
 		return d.recoverOps
 	}
 
 	ops := map[string]operations.RecoverInterface{}
-	for _, did := range d.dids {
+	for _, did := range d.filterDIDs {
 		if _, ok := d.recoverOps[did]; ok {
 			ops[did] = d.recoverOps[did]
 		}
@@ -274,12 +272,12 @@ func (d *OperationsProcessor) RecoverOps() map[string]operations.RecoverInterfac
 }
 
 func (d *OperationsProcessor) UpdateOps() map[string]operations.UpdateInterface {
-	if len(d.dids) == 0 {
+	if len(d.filterDIDs) == 0 {
 		return d.updateOps
 	}
 
 	ops := map[string]operations.UpdateInterface{}
-	for _, did := range d.dids {
+	for _, did := range d.filterDIDs {
 		if _, ok := d.updateOps[did]; ok {
 			ops[did] = d.updateOps[did]
 		}
@@ -289,12 +287,12 @@ func (d *OperationsProcessor) UpdateOps() map[string]operations.UpdateInterface 
 }
 
 func (d *OperationsProcessor) DeactivateOps() map[string]operations.DeactivateInterface {
-	if len(d.dids) == 0 {
+	if len(d.filterDIDs) == 0 {
 		return d.deactivateOps
 	}
 
 	ops := map[string]operations.DeactivateInterface{}
-	for _, did := range d.dids {
+	for _, did := range d.filterDIDs {
 		if _, ok := d.deactivateOps[did]; ok {
 			ops[did] = d.deactivateOps[did]
 		}
@@ -309,7 +307,7 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 		return d.log.Errorf("core index file URI is empty")
 	}
 
-	coreData, err := d.casStore.GetGZip(d.CoreIndexFileURI)
+	coreData, err := d.cas.Get(d.CoreIndexFileURI)
 	if err != nil {
 		return d.log.Errorf("failed to get core index file: %w", err)
 	}
@@ -328,7 +326,7 @@ func (d *OperationsProcessor) fetchCoreProofFile() error {
 		return d.log.Errorf("core proof file URI is empty")
 	}
 
-	coreProofData, err := d.casStore.GetGZip(d.CoreProofFileURI)
+	coreProofData, err := d.cas.Get(d.CoreProofFileURI)
 	if err != nil {
 		return d.log.Errorf("failed to get core proof file: %w", err)
 	}
@@ -347,7 +345,7 @@ func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 		return d.log.Errorf("no provisional index file URI")
 	}
 
-	provisionalData, err := d.casStore.GetGZip(d.ProvisionalIndexFileURI)
+	provisionalData, err := d.cas.Get(d.ProvisionalIndexFileURI)
 	if err != nil {
 		return d.log.Errorf("failed to get provisional index file: %w", err)
 	}
@@ -366,7 +364,7 @@ func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 		return d.log.Errorf("no provisional proof file URI")
 	}
 
-	provisionalProofData, err := d.casStore.GetGZip(d.ProvisionalProofFileURI)
+	provisionalProofData, err := d.cas.Get(d.ProvisionalProofFileURI)
 	if err != nil {
 		return d.log.Errorf("failed to get provisional proof file: %w", err)
 	}
@@ -384,7 +382,7 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 		return d.log.Errorf("no chunk file URI")
 	}
 
-	chunkData, err := d.casStore.GetGZip(d.ChunkFileURI)
+	chunkData, err := d.cas.Get(d.ChunkFileURI)
 	if err != nil {
 		return d.log.Errorf("failed to get chunk file: %w", err)
 	}

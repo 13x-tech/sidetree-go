@@ -118,7 +118,7 @@ func (s *SideTreeOp) TxOutIndex() int {
 }
 
 //TODO Needs Test
-func SortSidetreeOps(ops []SideTreeOp) {
+func SortSideTreeOps(ops []SideTreeOp) {
 	sort.Slice(ops, func(i, j int) bool {
 		var sortedByHeight, sortedByTxIndex, sortedByTxOutIndex bool
 		sortedByHeight = ops[i].Height() < ops[j].Height()

@@ -4,20 +4,20 @@ import (
 	"fmt"
 )
 
-type SidetreeOption func(interface{})
+type SideTreeOption func(interface{})
 
-func WithDIDs(dids []string) SidetreeOption {
+func WithDIDs(filteredDIDs []string) SideTreeOption {
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
 			return
 		case *OperationsProcessor:
-			t.dids = dids
+			t.filterDIDs = filteredDIDs
 		}
 	}
 }
 
-func WithPrefix(prefix string) SidetreeOption {
+func WithPrefix(prefix string) SideTreeOption {
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
@@ -28,28 +28,23 @@ func WithPrefix(prefix string) SidetreeOption {
 	}
 }
 
-func WithStorage(storage Storage) SidetreeOption {
-	if storage == nil {
-		panic("storage is nil")
+func WithStorage(cas CAS) SideTreeOption {
+	if cas == nil {
+		panic("content addressed storage is nil")
 	}
 
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
-			t.store = storage
+			t.cas = cas
 		case *OperationsProcessor:
-			casStore, err := storage.CAS()
-			if err != nil {
-				return
-			}
-
-			t.casStore = casStore
+			t.cas = cas
 		}
 
 	}
 }
 
-func WithLogger(log Logger) SidetreeOption {
+func WithLogger(log Logger) SideTreeOption {
 	if log == nil {
 		panic("log is nil")
 	}
@@ -64,7 +59,7 @@ func WithLogger(log Logger) SidetreeOption {
 	}
 }
 
-func WithFeeFunctions(feeFunctions ...interface{}) SidetreeOption {
+func WithFeeFunctions(feeFunctions ...interface{}) SideTreeOption {
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
@@ -93,7 +88,7 @@ func WithFeeFunctions(feeFunctions ...interface{}) SidetreeOption {
 	}
 }
 
-func New(options ...SidetreeOption) *SideTree {
+func New(options ...SideTreeOption) *SideTree {
 	s := &SideTree{}
 	for _, option := range options {
 		option(s)
@@ -108,7 +103,7 @@ type ValueLocking func(writerLockId string, baseFee int, opCount int, anchorPoin
 
 type SideTree struct {
 	method      string
-	store       Storage
+	cas         CAS
 	log         Logger
 	baseFeeFn   *BaseFeeAlgorithm
 	perOpFeeFn  *PerOperationFee
@@ -124,7 +119,7 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp, ids []string) (map[SideTr
 		processor, err := Processor(
 			op,
 			WithPrefix(s.method),
-			WithStorage(s.store),
+			WithStorage(s.cas),
 			WithLogger(s.log),
 			WithDIDs(ids),
 		)
