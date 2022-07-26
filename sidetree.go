@@ -28,7 +28,7 @@ func WithPrefix(prefix string) SideTreeOption {
 	}
 }
 
-func WithStorage(cas CAS) SideTreeOption {
+func WithCAS(cas CAS) SideTreeOption {
 	if cas == nil {
 		panic("content addressed storage is nil")
 	}
@@ -120,7 +120,7 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp, ids []string) (map[SideTr
 		processor, err := Processor(
 			op,
 			WithPrefix(s.method),
-			WithStorage(s.cas),
+			WithCAS(s.cas),
 			WithLogger(s.log),
 			WithDIDs(ids),
 		)
