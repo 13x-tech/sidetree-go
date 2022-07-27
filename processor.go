@@ -25,10 +25,6 @@ func Processor(op SideTreeOp, options ...SideTreeOption) (*OperationsProcessor, 
 		return nil, fmt.Errorf("prefix is empty")
 	}
 
-	if d.log == nil {
-		return nil, fmt.Errorf("logger is not set")
-	}
-
 	if d.cas == nil {
 		return nil, fmt.Errorf("cas store is not set")
 	}
@@ -43,7 +39,6 @@ func Processor(op SideTreeOp, options ...SideTreeOption) (*OperationsProcessor, 
 type OperationsProcessor struct {
 	cas        CAS
 	filterDIDs []string
-	log        Logger
 	method     string
 	op         SideTreeOp
 
@@ -337,17 +332,17 @@ func (d *OperationsProcessor) DeactivateOps() map[string]operations.DeactivateIn
 func (d *OperationsProcessor) fetchCoreIndexFile() error {
 
 	if d.CoreIndexFileURI == "" {
-		return d.log.Errorf("core index file URI is empty")
+		return fmt.Errorf("core index file URI is empty")
 	}
 
 	coreData, err := d.cas.Get(d.CoreIndexFileURI)
 	if err != nil {
-		return d.log.Errorf("failed to get core index file: %w", err)
+		return fmt.Errorf("failed to get core index file: %w", err)
 	}
 
 	d.CoreIndexFile, err = NewCoreIndexFile(d, coreData)
 	if err != nil {
-		return d.log.Errorf("failed to create core index file: %w", err)
+		return fmt.Errorf("failed to create core index file: %w", err)
 	}
 
 	return nil
@@ -356,17 +351,17 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 func (d *OperationsProcessor) fetchCoreProofFile() error {
 
 	if d.CoreProofFileURI == "" {
-		return d.log.Errorf("core proof file URI is empty")
+		return fmt.Errorf("core proof file URI is empty")
 	}
 
 	coreProofData, err := d.cas.Get(d.CoreProofFileURI)
 	if err != nil {
-		return d.log.Errorf("failed to get core proof file: %w", err)
+		return fmt.Errorf("failed to get core proof file: %w", err)
 	}
 
 	d.CoreProofFile, err = NewCoreProofFile(d, coreProofData)
 	if err != nil {
-		return d.log.Errorf("failed to create core proof file: %w", err)
+		return fmt.Errorf("failed to create core proof file: %w", err)
 	}
 
 	return nil
@@ -375,17 +370,17 @@ func (d *OperationsProcessor) fetchCoreProofFile() error {
 func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 
 	if d.ProvisionalIndexFileURI == "" {
-		return d.log.Errorf("no provisional index file URI")
+		return fmt.Errorf("no provisional index file URI")
 	}
 
 	provisionalData, err := d.cas.Get(d.ProvisionalIndexFileURI)
 	if err != nil {
-		return d.log.Errorf("failed to get provisional index file: %w", err)
+		return fmt.Errorf("failed to get provisional index file: %w", err)
 	}
 
 	d.ProvisionalIndexFile, err = NewProvisionalIndexFile(d, provisionalData)
 	if err != nil {
-		return d.log.Errorf("failed to create provisional index file: %w", err)
+		return fmt.Errorf("failed to create provisional index file: %w", err)
 	}
 
 	return nil
@@ -394,17 +389,17 @@ func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 
 	if d.ProvisionalProofFileURI == "" {
-		return d.log.Errorf("no provisional proof file URI")
+		return fmt.Errorf("no provisional proof file URI")
 	}
 
 	provisionalProofData, err := d.cas.Get(d.ProvisionalProofFileURI)
 	if err != nil {
-		return d.log.Errorf("failed to get provisional proof file: %w", err)
+		return fmt.Errorf("failed to get provisional proof file: %w", err)
 	}
 
 	d.ProvisionalProofFile, err = NewProvisionalProofFile(d, provisionalProofData)
 	if err != nil {
-		return d.log.Errorf("failed to create provisional proof file: %w", err)
+		return fmt.Errorf("failed to create provisional proof file: %w", err)
 	}
 
 	return nil
@@ -412,17 +407,17 @@ func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 
 func (d *OperationsProcessor) fetchChunkFile() error {
 	if d.ChunkFileURI == "" {
-		return d.log.Errorf("no chunk file URI")
+		return fmt.Errorf("no chunk file URI")
 	}
 
 	chunkData, err := d.cas.Get(d.ChunkFileURI)
 	if err != nil {
-		return d.log.Errorf("failed to get chunk file: %w", err)
+		return fmt.Errorf("failed to get chunk file: %w", err)
 	}
 
 	d.ChunkFile, err = NewChunkFile(d, chunkData)
 	if err != nil {
-		return d.log.Errorf("failed to create chunk file: %w", err)
+		return fmt.Errorf("failed to create chunk file: %w", err)
 	}
 
 	return nil

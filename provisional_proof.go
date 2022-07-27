@@ -51,7 +51,7 @@ func (p *ProvisionalProofFile) setUpdateOp(index int, update SignedUpdateDataOp)
 
 	reveal, ok := p.processor.ProvisionalIndexFile.revealValues[id]
 	if !ok {
-		p.processor.log.Errorf("core index: %s - failed to find reveal value for id %s", p.processor.CoreIndexFileURI, id)
+		//fmt.Errorf("core index: %s - failed to find reveal value for id %s", p.processor.CoreIndexFileURI, id)
 		return
 	}
 

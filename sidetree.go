@@ -44,21 +44,6 @@ func WithCAS(cas CAS) SideTreeOption {
 	}
 }
 
-func WithLogger(log Logger) SideTreeOption {
-	if log == nil {
-		panic("log is nil")
-	}
-
-	return func(d interface{}) {
-		switch t := d.(type) {
-		case *SideTree:
-			t.log = log
-		case *OperationsProcessor:
-			t.log = log
-		}
-	}
-}
-
 func WithFeeFunctions(feeFunctions ...interface{}) SideTreeOption {
 	return func(d interface{}) {
 		switch t := d.(type) {
@@ -104,7 +89,6 @@ type ValueLocking func(writerLockId string, baseFee int, opCount int, anchorPoin
 type SideTree struct {
 	method      string
 	cas         CAS
-	log         Logger
 	baseFeeFn   *BaseFeeAlgorithm
 	perOpFeeFn  *PerOperationFee
 	valueLockFn *ValueLocking
@@ -121,7 +105,6 @@ func (s *SideTree) ProcessOperations(ops []SideTreeOp, ids []string) (map[SideTr
 			op,
 			WithPrefix(s.method),
 			WithCAS(s.cas),
-			WithLogger(s.log),
 			WithDIDs(ids),
 		)
 		if err != nil {
