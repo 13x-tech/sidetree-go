@@ -56,8 +56,6 @@ func (p *ProvisionalProofFile) setUpdateOp(index int, update SignedUpdateDataOp)
 	}
 
 	p.processor.updateOps[id] = operations.UpdateOperation(
-		p.processor.Anchor(),
-		p.processor.SystemAnchor(),
 		id,
 		reveal,
 		update.SignedData,

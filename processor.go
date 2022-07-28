@@ -441,8 +441,6 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		}
 
 		createOp := operations.CreateOperation(
-			p.Anchor(),
-			p.SystemAnchor(),
 			op.SuffixData,
 		)
 

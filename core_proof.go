@@ -57,8 +57,6 @@ func (p *CoreProofFile) setDeactivateOp(id string, revealValue string, op Signed
 
 func (p *CoreProofFile) setRecoverOp(id string, revealValue string, op SignedRecoverDataOp) {
 	p.processor.recoverOps[id] = operations.RecoverOperation(
-		p.processor.Anchor(),
-		p.processor.SystemAnchor(),
 		id,
 		revealValue,
 		op.SignedData,
