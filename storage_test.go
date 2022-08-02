@@ -5,11 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"sync"
 	"testing"
 
-	"github.com/13x-tech/sidetree-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
 type Closer struct{}
@@ -18,41 +17,10 @@ func (c *Closer) Close() error {
 	return nil
 }
 
-func NewTestStorage() *TestStorage {
-	return &TestStorage{
-		index: &TestIndexerStorage{
-			indexOps: map[int][]SideTreeOp{},
-			didOps:   map[string][]SideTreeOp{},
-		},
-		dids: &TestDIDsStorage{
-			dids:        map[string]*did.Document{},
-			deactivated: map[string]struct{}{},
-			mu:          sync.Mutex{},
-		},
-		cas: &TestCASStorage{
-			cas: map[string][]byte{},
-			mu:  sync.Mutex{},
-		},
+func NewTestCAS() *TestCASStorage {
+	return &TestCASStorage{
+		cas: make(map[string][]byte),
 	}
-}
-
-type TestStorage struct {
-	Closer
-	index *TestIndexerStorage
-	dids  *TestDIDsStorage
-	cas   *TestCASStorage
-}
-
-func (t *TestStorage) Indexer() (Indexer, error) {
-	return t.index, nil
-}
-
-func (t *TestStorage) DIDs() (DIDs, error) {
-	return t.dids, nil
-}
-
-func (t *TestStorage) CAS() (CAS, error) {
-	return t.cas, nil
 }
 
 type TestCASStorage struct {
@@ -65,7 +33,7 @@ func (t *TestCASStorage) Start() error {
 	return nil
 }
 
-func (t *TestCASStorage) PutGZip(data []byte) (string, error) {
+func (t *TestCASStorage) Put(data []byte) (string, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	id := fmt.Sprintf("%x", sha256.Sum256(data))
@@ -73,7 +41,7 @@ func (t *TestCASStorage) PutGZip(data []byte) (string, error) {
 	return id, nil
 }
 
-func (t *TestCASStorage) GetGZip(id string) ([]byte, error) {
+func (t *TestCASStorage) Get(id string) ([]byte, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	data, ok := t.cas[id]
@@ -90,217 +58,19 @@ func (t *TestCASStorage) insertObject(id string, data []byte) error {
 	return nil
 }
 
-type TestDIDsStorage struct {
-	Closer
-	mu          sync.Mutex
-	dids        map[string]*did.Document
-	deactivated map[string]struct{}
-}
-
-func (t *TestDIDsStorage) Put(doc *did.Document) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.dids[doc.Document.ID] = doc
-	return nil
-}
-
-func (t *TestDIDsStorage) Deactivate(id string) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.deactivated[id] = struct{}{}
-	return nil
-}
-
-func (t *TestDIDsStorage) Recover(id string) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	delete(t.deactivated, id)
-	return nil
-}
-
-func (t *TestDIDsStorage) Get(id string) (*did.Document, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	_, ok := t.deactivated[id]
-	if ok {
-		return nil, fmt.Errorf("did %s is deactivated", id)
-	}
-
-	doc, ok := t.dids[id]
-	if !ok {
-		return nil, fmt.Errorf("no DID found for id %s", id)
-	}
-	return doc, nil
-}
-
-func (t *TestDIDsStorage) List() ([]string, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	var ids []string
-	for id := range t.dids {
-		_, ok := t.deactivated[id]
-		if !ok {
-			ids = append(ids, id)
-		}
-	}
-	return ids, nil
-}
-
-type TestIndexerStorage struct {
-	Closer
-	mu       sync.Mutex
-	didOps   map[string][]SideTreeOp
-	indexOps map[int][]SideTreeOp
-}
-
-func (t *TestIndexerStorage) PutOps(index int, ops []SideTreeOp) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.indexOps[index] = ops
-	return nil
-}
-
-func (t *TestIndexerStorage) GetOps(index int) ([]SideTreeOp, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	ops, ok := t.indexOps[index]
-	if !ok {
-		return nil, fmt.Errorf("no ops found for index %d", index)
-	}
-	return ops, nil
-}
-
-func (t *TestIndexerStorage) PutDIDOps(id string, ops []SideTreeOp) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.didOps[id] = ops
-	return nil
-}
-
-func (t *TestIndexerStorage) GetDIDOps(id string) ([]SideTreeOp, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	ops, ok := t.didOps[id]
-	if !ok {
-		return nil, fmt.Errorf("no ops found for id %s", id)
-	}
-	return ops, nil
-}
-
-var storageTestOps = []SideTreeOp{
+var storageTestOps = []operations.Anchor{
 	{
-		SystemAnchorPoint: "1234:abcd:56:efgh:7",
-		AnchorString:      "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-		Processed:         false,
+		Sequence: "1234:abcd:56:efgh:7",
+		Anchor:   "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 	},
 	{
-		SystemAnchorPoint: "1234:efgh:75:efgh:7",
-		AnchorString:      "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-		Processed:         false,
+		Sequence: "1234:efgh:75:efgh:7",
+		Anchor:   "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 	},
 	{
-		SystemAnchorPoint: "1234:ijkl:89:efgh:7",
-		AnchorString:      "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-		Processed:         false,
+		Sequence: "1234:ijkl:89:efgh:7",
+		Anchor:   "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 	},
-}
-
-func TestIndexeOps(t *testing.T) {
-	storage := NewTestStorage()
-	indexer, err := storage.Indexer()
-	if err != nil {
-		t.Errorf("Error creating indexer: %v", err)
-	}
-	if indexer == nil {
-		t.Error("Indexer is nil")
-	}
-
-	if err := indexer.PutOps(1234, storageTestOps); err != nil {
-		t.Errorf("Error putting ops: %v", err)
-	}
-
-	ops, err := indexer.GetOps(1234)
-	if err != nil {
-		t.Errorf("Error getting ops: %v", err)
-	}
-
-	if !reflect.DeepEqual(ops, storageTestOps) {
-		t.Errorf("Ops not equal: %v", ops)
-	}
-}
-
-func TestDIDOps(t *testing.T) {
-	storage := NewTestStorage()
-	indexer, err := storage.Indexer()
-	if err != nil {
-		t.Errorf("Error creating Indexer: %v", err)
-	}
-	if indexer == nil {
-		t.Error("Indexer is nil")
-	}
-
-	if err := indexer.PutDIDOps("abc", storageTestOps); err != nil {
-		t.Errorf("Error putting ops: %v", err)
-	}
-
-	ops, err := indexer.GetDIDOps("abc")
-	if err != nil {
-		t.Errorf("Error getting ops: %v", err)
-	}
-
-	if !reflect.DeepEqual(ops, storageTestOps) {
-		t.Errorf("Ops not equal: %v", ops)
-	}
-
-}
-
-func TestDIDs(t *testing.T) {
-	storage := NewTestStorage()
-	dids, err := storage.DIDs()
-	if err != nil {
-		t.Errorf("Error creating DIDs storage: %v", err)
-	}
-	if dids == nil {
-		t.Errorf("DIDs storage is nil")
-	}
-
-	doc := testDoc()
-
-	if err := dids.Put(doc); err != nil {
-		t.Errorf("Error putting DID: %v", err)
-	}
-
-	doc2, err := dids.Get(doc.Document.ID)
-	if err != nil {
-		t.Errorf("Error getting DID: %v", err)
-	}
-
-	if !reflect.DeepEqual(doc, doc2) {
-		t.Errorf("DIDs not equal: %v", doc)
-	}
-
-	if err := dids.Deactivate(doc.Document.ID); err != nil {
-		t.Errorf("Error deactivating DID: %v", err)
-	}
-
-	_, err = dids.Get(doc.Document.ID)
-	if err == nil {
-		t.Errorf("Deactivated did should not be found")
-	}
-
-	if err := dids.Recover(doc.Document.ID); err != nil {
-		t.Errorf("Error recovering DID: %v", err)
-	}
-
-	doc3, err := dids.Get(doc.Document.ID)
-	if err != nil {
-		t.Errorf("Error getting DID: %v", err)
-	}
-
-	if !reflect.DeepEqual(doc, doc3) {
-		t.Errorf("DIDs not equal: %v", doc)
-	}
-
 }
 
 func TestCAS(t *testing.T) {
@@ -310,8 +80,7 @@ func TestCAS(t *testing.T) {
 		t.Errorf("Error marshalling test object: %v", err)
 	}
 
-	storage := NewTestStorage()
-	cas, err := storage.CAS()
+	cas := NewTestCAS()
 	if err != nil {
 		t.Errorf("Error creating CAS: %v", err)
 	}
@@ -323,11 +92,11 @@ func TestCAS(t *testing.T) {
 		t.Errorf("Error starting CAS: %v", err)
 	}
 
-	if err := cas.(*TestCASStorage).insertObject("QmXXXXX", testObject); err != nil {
+	if err := cas.insertObject("QmXXXXX", testObject); err != nil {
 		t.Errorf("Error inserting test object: %v", err)
 	}
 
-	fetchedObject, err := cas.GetGZip("QmXXXXX")
+	fetchedObject, err := cas.Get("QmXXXXX")
 	if err != nil {
 		t.Errorf("Error getting gzip: %v", err)
 	}
@@ -336,50 +105,4 @@ func TestCAS(t *testing.T) {
 		t.Errorf("Objects not equal: %v", testObject)
 	}
 
-}
-
-func testDoc() *did.Document {
-
-	return &did.Document{
-		Context: "https://w3id.org/did-resolution/v1",
-		Document: &did.DocumentData{
-			ID:    "EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
-			DocID: "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
-			Context: []interface{}{
-				"https://www.w3.org/ns/did/v1",
-				map[string]interface{}{"@base": "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ"},
-			},
-			Services: []did.Service{{
-				ID:   "#linkeddomains",
-				Type: "LinkedDomains",
-				ServiceEndpoint: map[string]interface{}{
-					"origins": []string{"https://woodgrove.com/"},
-				},
-			}},
-			Verification: []did.KeyInfo{{
-				ID:         "#sig_44a9661f",
-				Controller: "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
-				Type:       "EcdsaSecp256k1VerificationKey2019",
-				PubKey: map[string]interface{}{
-					"kty": "EC",
-					"crv": "secp256k1",
-					"x":   "sE3ra-hJlRySLrZVSOwxnJtb2u9h_njbNKG8c53QEqo",
-					"y":   "zERmPj751qx6-AL9n60eIojS-Qp9BcYB2IKEMrl0E3c",
-				}},
-			},
-			Authentication:       []string{"#sig_44a9661f"},
-			Assertion:            []string{"#sig_44a9661f"},
-			CapabilityDelegation: []string{"#sig_44a9661f"},
-			CapabilityInvocation: []string{"#sig_44a9661f"},
-			KeyAgreement:         []string{"#sig_44a9661f"},
-		},
-		Metadata: did.Metadata{
-			CanonicalId: "did:ion:EiBCyVAW45f9xyh_RbA6ZK4aM2gndCOjg8-mYfCVHXShVQ",
-			Method: did.MetadataMethod{
-				Published:          true,
-				UpdateCommitment:   "EiAGj7alOM1_2pVQv_Phbw3928zlVWWvMYuLsvuDnSuImg",
-				RecoveryCommitment: "EiB_FKDwQpnzkrD9Rwvu9puF8WUYdOvO06lX1F0LoF7WKw",
-			},
-		},
-	}
 }
