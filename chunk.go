@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/did"
 )
 
 func NewChunkFile(processor *OperationsProcessor, data []byte) (*ChunkFile, error) {
@@ -50,93 +50,18 @@ func (c *ChunkFile) Process() error {
 
 	for i, delta := range c.Deltas {
 		id := mappingArray[i]
-		if err := c.processDelta(id, delta); err != nil {
-			c.processor.log.Errorf("core index: %s - failed to process delta: %w", c.processor.CoreIndexFileURI, err)
-		}
+		c.setDelta(id, delta)
 	}
 
 	return nil
 }
 
-func (c *ChunkFile) createdDeltaHash(id string) (string, bool) {
-	if c.processor.createdDeltaHash == nil {
-		return "", false
+func (c *ChunkFile) setDelta(id string, delta did.Delta) {
+	if createOp, ok := c.processor.createOps[id]; ok {
+		createOp.SetDelta(delta)
+	} else if recoverOp, ok := c.processor.recoverOps[id]; ok {
+		recoverOp.SetDelta(delta)
+	} else if updateOp, ok := c.processor.updateOps[id]; ok {
+		updateOp.SetDelta(delta)
 	}
-
-	deltaHash, ok := c.processor.createdDeltaHash[id]
-	return deltaHash, ok
-}
-
-func (c *ChunkFile) recoveryDeltaHash(id string) (string, bool) {
-	if c.processor.CoreProofFile == nil || c.processor.CoreProofFile.recoveryDeltaHash == nil {
-		return "", false
-	}
-
-	deltaHash, ok := c.processor.CoreProofFile.recoveryDeltaHash[id]
-	return deltaHash, ok
-}
-
-func (c *ChunkFile) updateDeltaHash(id string) (string, bool) {
-	if c.processor.ProvisionalProofFile == nil {
-		return "", false
-	}
-
-	if c.processor.ProvisionalProofFile.verifiedOps == nil {
-		return "", false
-	}
-
-	deltaHash, ok := c.processor.ProvisionalProofFile.verifiedOps[id]
-	return deltaHash, ok
-}
-
-func (c *ChunkFile) checkDeltaHash(id, hash string) error {
-	if deltaHash, ok := c.createdDeltaHash(id); ok {
-
-		if deltaHash != hash {
-			return fmt.Errorf("delta hash does not match for created: %s", id)
-		}
-
-	} else if deltaHash, ok = c.recoveryDeltaHash(id); ok {
-
-		if deltaHash != hash {
-			return fmt.Errorf("delta hash does not match for recovery: %s", id)
-		}
-
-	} else if deltaHash, ok = c.updateDeltaHash(id); ok {
-
-		if deltaHash != hash {
-			return fmt.Errorf("delta hash does not match for operation: %s", id)
-		}
-	}
-	return nil
-}
-
-func (c *ChunkFile) processDelta(id string, delta did.Delta) error {
-	hash, err := delta.Hash()
-	if err != nil {
-		return err
-	}
-
-	if err := c.checkDeltaHash(id, hash); err != nil {
-		return err
-	}
-
-	if err := c.processor.setUpdateCommitment(id, delta.UpdateCommitment); err != nil {
-		return fmt.Errorf("failed to set update commitment for %s: %w", id, err)
-	}
-
-	doc, err := c.processor.didStore.Get(id)
-	if err != nil {
-		return fmt.Errorf("failed to get document for %s: %w", id, err)
-	}
-
-	if err := PatchData(c.processor.log, c.processor.prefix, delta, doc); err != nil {
-		return fmt.Errorf("failed to patch data for %s: %w", id, err)
-	}
-
-	if err := c.processor.didStore.Put(doc); err != nil {
-		return fmt.Errorf("failed to put document for %s: %w", id, err)
-	}
-
-	return nil
 }

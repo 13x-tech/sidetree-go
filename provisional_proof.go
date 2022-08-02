@@ -3,6 +3,8 @@ package sidetree
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
 func NewProvisionalProofFile(processor *OperationsProcessor, data []byte) (*ProvisionalProofFile, error) {
@@ -34,14 +36,7 @@ func (p *ProvisionalProofFile) Process() error {
 		p.verifiedOps = map[string]string{}
 
 		for i, op := range p.Operations.Update {
-			if err := p.processUpdate(i, op); err != nil {
-				p.processor.log.Errorf(
-					"core index: %s - failed to process provisional proof operation %d: %w",
-					p.processor.CoreIndexFileURI,
-					i,
-					err,
-				)
-			}
+			p.setUpdateOp(i, op)
 		}
 
 	} else {
@@ -51,28 +46,20 @@ func (p *ProvisionalProofFile) Process() error {
 	return nil
 }
 
-func (p *ProvisionalProofFile) processUpdate(index int, update SignedUpdateDataOp) error {
+func (p *ProvisionalProofFile) setUpdateOp(index int, update SignedUpdateDataOp) {
 	id := p.processor.updateMappingArray[index]
 
-	revealValue, ok := p.processor.ProvisionalIndexFile.revealValues[id]
+	reveal, ok := p.processor.ProvisionalIndexFile.revealValues[id]
 	if !ok {
-		return fmt.Errorf("failed to find reveal value for %s", id)
+		//fmt.Errorf("core index: %s - failed to find reveal value for id %s", p.processor.CoreIndexFileURI, id)
+		return
 	}
 
-	if ok, err := update.ValidateReveal(revealValue); err != nil {
-		return fmt.Errorf("failed to validate reveal value in provisional update for %s: %w", id, err)
-	} else if !ok {
-		return fmt.Errorf("failed to validate reveal value in provisional update for %s", id)
-	}
-
-	deltaHash, err := update.DeltaHash()
-	if err != nil {
-		return fmt.Errorf("failed to get delta hash for %s: %w", id, err)
-	}
-
-	p.verifiedOps[id] = deltaHash
-
-	return nil
+	p.processor.updateOps[id] = operations.UpdateOperation(
+		id,
+		reveal,
+		update.SignedData,
+	)
 }
 
 type PorvProofOperations struct {

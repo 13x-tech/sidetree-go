@@ -2,69 +2,51 @@ package sidetree
 
 import (
 	"fmt"
+
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
-type SidetreeOption func(interface{})
+type SideTreeOption func(interface{})
 
-func WithPrefix(prefix string) SidetreeOption {
+func WithDIDs(filteredDIDs []string) SideTreeOption {
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
-			t.prefix = prefix
+			return
 		case *OperationsProcessor:
-			t.prefix = prefix
+			t.filterDIDs = filteredDIDs
 		}
 	}
 }
 
-func WithStorage(storage Storage) SidetreeOption {
-	if storage == nil {
-		panic("storage is nil")
-	}
-
+func WithPrefix(prefix string) SideTreeOption {
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
-			t.store = storage
+			t.method = prefix
 		case *OperationsProcessor:
-			didStore, err := storage.DIDs()
-			if err != nil {
-				return
-			}
-
-			casStore, err := storage.CAS()
-			if err != nil {
-				return
-			}
-
-			indexStore, err := storage.Indexer()
-			if err != nil {
-				return
-			}
-			t.didStore = didStore
-			t.casStore = casStore
-			t.indexStore = indexStore
+			t.method = prefix
 		}
-
 	}
 }
 
-func WithLogger(log Logger) SidetreeOption {
-	if log == nil {
-		panic("log is nil")
+func WithCAS(cas CAS) SideTreeOption {
+	if cas == nil {
+		panic("content addressed storage is nil")
 	}
 
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
-			t.log = log
+			t.cas = cas
 		case *OperationsProcessor:
-			t.log = log
+			t.cas = cas
 		}
+
 	}
 }
 
-func WithFeeFunctions(feeFunctions ...interface{}) SidetreeOption {
+func WithFeeFunctions(feeFunctions ...interface{}) SideTreeOption {
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
@@ -93,7 +75,7 @@ func WithFeeFunctions(feeFunctions ...interface{}) SidetreeOption {
 	}
 }
 
-func New(options ...SidetreeOption) *SideTree {
+func New(options ...SideTreeOption) *SideTree {
 	s := &SideTree{}
 	for _, option := range options {
 		option(s)
@@ -107,31 +89,32 @@ type PerOperationFee func(baseFee int, opCount int, anchorPoint string) bool
 type ValueLocking func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool
 
 type SideTree struct {
-	prefix      string
-	store       Storage
-	log         Logger
+	method      string
+	cas         CAS
 	baseFeeFn   *BaseFeeAlgorithm
 	perOpFeeFn  *PerOperationFee
 	valueLockFn *ValueLocking
 }
 
-func (s *SideTree) ProcessOperations(ops []SideTreeOp) error {
+func (s *SideTree) ProcessOperations(ops []operations.Anchor, ids []string) (map[operations.Anchor]ProcessedOperations, error) {
 
+	//TODO Validate ids
+
+	opsMap := map[operations.Anchor]ProcessedOperations{}
 	for _, op := range ops {
+
 		processor, err := Processor(
 			op,
-			WithPrefix(s.prefix),
-			WithStorage(s.store),
-			WithLogger(s.log),
+			WithPrefix(s.method),
+			WithCAS(s.cas),
+			WithDIDs(ids),
 		)
 		if err != nil {
-			return fmt.Errorf("failed to create operations processor: %w", err)
+			return nil, fmt.Errorf("failed to create operations processor: %w", err)
 		}
 
-		if err := processor.Process(); err != nil {
-			return fmt.Errorf("failed to process operations: %w", err)
-		}
+		opsMap[op] = processor.Process()
 	}
 
-	return nil
+	return opsMap, nil
 }

@@ -3,10 +3,10 @@ package sidetree
 import (
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
-func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, error) {
+func Processor(op operations.Anchor, options ...SideTreeOption) (*OperationsProcessor, error) {
 
 	if op.CID() == "" {
 		return nil, fmt.Errorf("index URI is empty")
@@ -21,33 +21,26 @@ func Processor(op SideTreeOp, options ...SidetreeOption) (*OperationsProcessor, 
 		option(d)
 	}
 
-	if d.prefix == "" {
+	if d.method == "" {
 		return nil, fmt.Errorf("prefix is empty")
 	}
 
-	if d.log == nil {
-		return nil, fmt.Errorf("logger is not set")
-	}
-
-	if d.didStore == nil {
-		return nil, fmt.Errorf("did store is not set")
-	}
-
-	if d.casStore == nil {
+	if d.cas == nil {
 		return nil, fmt.Errorf("cas store is not set")
 	}
 
-	if d.indexStore == nil {
-		return nil, fmt.Errorf("index store is not set")
+	if d.filterDIDs == nil {
+		d.filterDIDs = []string{}
 	}
 
 	return d, nil
 }
 
 type OperationsProcessor struct {
-	prefix string
-	op     SideTreeOp
-	log    Logger
+	cas        CAS
+	filterDIDs []string
+	method     string
+	op         operations.Anchor
 
 	CoreIndexFileURI string
 	CoreIndexFile    *CoreIndexFile
@@ -65,16 +58,16 @@ type OperationsProcessor struct {
 	ChunkFileURI string
 	ChunkFile    *ChunkFile
 
-	didStore   DIDs
-	casStore   CAS
-	indexStore Indexer
-
-	createdDeltaHash map[string]string
+	createOps     map[string]operations.CreateInterface
+	updateOps     map[string]operations.UpdateInterface
+	deactivateOps map[string]operations.DeactivateInterface
+	recoverOps    map[string]operations.RecoverInterface
 
 	createMappingArray   []string
 	recoveryMappingArray []string
 	updateMappingArray   []string
 
+	//TODO These Don't actually do Anything Yet
 	baseFeeFn   *BaseFeeAlgorithm
 	perOpFeeFn  *PerOperationFee
 	valueLockFn *ValueLocking
@@ -82,123 +75,278 @@ type OperationsProcessor struct {
 	baseFee int
 }
 
-func (d *OperationsProcessor) Process() error {
+type ProcessedOperations struct {
+	AnchorString   string
+	AnchorSequence string
+	Error          error
+	CreateOps      map[string]operations.CreateInterface
+	UpdateOps      map[string]operations.UpdateInterface
+	DeactivateOps  map[string]operations.DeactivateInterface
+	RecoverOps     map[string]operations.RecoverInterface
+}
+
+func (b *OperationsProcessor) Anchor() string {
+	return string(b.op.Anchor)
+}
+
+func (b *OperationsProcessor) SystemAnchor() string {
+	return string(b.op.Sequence)
+}
+
+func (d *OperationsProcessor) Process() ProcessedOperations {
+
+	d.createMappingArray = []string{}
+	d.recoveryMappingArray = []string{}
+	d.updateMappingArray = []string{}
+
+	d.createOps = map[string]operations.CreateInterface{}
+	d.updateOps = map[string]operations.UpdateInterface{}
+	d.deactivateOps = map[string]operations.DeactivateInterface{}
+	d.recoverOps = map[string]operations.RecoverInterface{}
+
+	ops := ProcessedOperations{
+		Error:          nil,
+		AnchorString:   d.Anchor(),
+		AnchorSequence: d.SystemAnchor(),
+	}
 
 	d.createMappingArray = []string{}
 	d.recoveryMappingArray = []string{}
 	d.updateMappingArray = []string{}
 
 	if err := d.fetchCoreIndexFile(); err != nil {
-		return d.log.Errorf("core index: %s - failed to fetch core index file: %w", d.CoreIndexFileURI, err)
+		//TODO Define Errors
+		ops.Error = err
+		return ops
 	}
 
 	if d.CoreIndexFile == nil {
-		return d.log.Errorf("core index: %s - core index file is nil", d.CoreIndexFileURI)
+		ops.Error = fmt.Errorf("core index file is nil")
+		return ops
 	}
 
 	// https://identity.foundation/sidetree/spec/#base-fee-variable
 	if d.baseFeeFn != nil {
 		baseFeeFn := *d.baseFeeFn
-		d.baseFee = baseFeeFn(d.op.Operations(), d.op.SystemAnchorPoint)
+		d.baseFee = baseFeeFn(d.op.Operations(), string(d.op.Sequence))
 	}
 
 	// https://identity.foundation/sidetree/spec/#per-operation-fee
 	if d.perOpFeeFn != nil {
 		perOpFeeFn := *d.perOpFeeFn
-		if !perOpFeeFn(d.baseFee, d.op.Operations(), d.op.SystemAnchorPoint) {
-			return d.log.Errorf("per op fee is not valid")
+		if !perOpFeeFn(d.baseFee, d.op.Operations(), string(d.op.Sequence)) {
+			ops.Error = fmt.Errorf("per op fee is not valid")
+			return ops
 		}
 	}
 
 	// https://identity.foundation/sidetree/spec/#value-locking
 	if d.valueLockFn != nil {
 		valueLockFn := *d.valueLockFn
-		if !valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, d.op.SystemAnchorPoint) {
-			return d.log.Errorf("value lock is not valid")
+		if !valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, string(d.op.Sequence)) {
+			ops.Error = fmt.Errorf("value lock is not valid")
+			return ops
 		}
 	}
 
 	if err := d.CoreIndexFile.Process(); err != nil {
-		return d.log.Errorf("core index: %s failed to process core index file: %w", d.CoreIndexFileURI, err)
+		ops.Error = err
+		return ops
 	}
 
 	if d.CoreProofFileURI != "" {
 
 		if err := d.fetchCoreProofFile(); err != nil {
-			return d.log.Errorf("core index: %s - failed to fetch core proof file: %w", d.CoreIndexFileURI, err)
+			ops.Error = err
+			return ops
 		}
 
 		if d.CoreProofFile == nil {
-			return d.log.Errorf("core index: %s - core proof file is nil", d.CoreIndexFileURI)
+			ops.Error = fmt.Errorf("core proof file is nil")
+			return ops
 		}
 
 		if err := d.CoreProofFile.Process(); err != nil {
-			return d.log.Errorf("core index: %s - failed to process core proof file: %w", d.CoreIndexFileURI, err)
+			ops.Error = err
+			return ops
 		}
 	}
 
 	if d.ProvisionalIndexFileURI != "" {
 
 		if err := d.fetchProvisionalIndexFile(); err != nil {
-			return d.log.Errorf("core index: %s - failed to fetch provisional index file: %w", d.CoreIndexFileURI, err)
+			ops.Error = err
+			return ops
 		}
 
 		if d.ProvisionalIndexFile == nil {
-			return d.log.Errorf("core index: %s - provisional index file is nil", d.CoreIndexFileURI)
+			ops.Error = fmt.Errorf("provisional index file is nil")
+			return ops
 		}
 
 		if err := d.ProvisionalIndexFile.Process(); err != nil {
-			return d.log.Errorf("core index: %s - failed to process provisional index file: %w", d.CoreIndexFileURI, err)
+			ops.Error = err
+			return ops
 		}
 
 		if len(d.ProvisionalIndexFile.Operations.Update) > 0 {
 
 			if err := d.fetchProvisionalProofFile(); err != nil {
-				return d.log.Errorf("core index: %s - failed to fetch provisional proof file: %w", d.CoreIndexFileURI, err)
+				ops.Error = err
+				return ops
 			}
 
 			if d.ProvisionalProofFile == nil {
-				return d.log.Errorf("core index: %s - provisional proof file is nil", d.CoreIndexFileURI)
+				ops.Error = fmt.Errorf("provisional proof file is nil")
+				return ops
 			}
 
 			if err := d.ProvisionalProofFile.Process(); err != nil {
-				return d.log.Errorf("core index: %s - failed to process provisional proof file: %w", d.CoreIndexFileURI, err)
+				ops.Error = err
+				return ops
 			}
 		}
 
 		if len(d.ProvisionalIndexFile.Chunks) > 0 {
 			if err := d.fetchChunkFile(); err != nil {
-				return d.log.Errorf("core index: %s - failed to fetch chunk file: %w", d.CoreIndexFileURI, err)
+				ops.Error = err
+				return ops
 			}
 
 			if d.ChunkFile == nil {
-				return d.log.Errorf("core index: %s - chunk file is nil", d.CoreIndexFileURI)
+				ops.Error = fmt.Errorf("chunk file is nil")
+				return ops
 			}
 
 			if err := d.ChunkFile.Process(); err != nil {
-				return d.log.Errorf("core index: %s - failed to process chunk file: %w", d.CoreIndexFileURI, err)
+				ops.Error = err
+				return ops
 			}
 		}
 	}
 
-	return nil
+	//Check for duplicate dids file invalid if duplicates exist
+	if d.hasDuplicateDIDs() {
+		ops.Error = fmt.Errorf("duplicate dids found")
+		return ops
+	}
 
+	return ProcessedOperations{
+		Error:          nil,
+		AnchorString:   d.Anchor(),
+		AnchorSequence: d.SystemAnchor(),
+		CreateOps:      d.CreateOps(),
+		RecoverOps:     d.RecoverOps(),
+		UpdateOps:      d.UpdateOps(),
+		DeactivateOps:  d.DeactivateOps(),
+	}
+}
+
+func (d *OperationsProcessor) hasDuplicateDIDs() bool {
+	dids := make(map[string]struct{})
+	for _, id := range d.createMappingArray {
+		if _, ok := dids[id]; ok {
+			return true
+		}
+		dids[id] = struct{}{}
+	}
+	for _, id := range d.updateMappingArray {
+		if _, ok := dids[id]; ok {
+			return true
+		}
+		dids[id] = struct{}{}
+	}
+	for _, id := range d.recoveryMappingArray {
+		if _, ok := dids[id]; ok {
+			return true
+		}
+		dids[id] = struct{}{}
+	}
+
+	for id, _ := range d.deactivateOps {
+		if _, ok := dids[id]; ok {
+			return true
+		}
+		dids[id] = struct{}{}
+	}
+
+	return false
+}
+
+func (d *OperationsProcessor) CreateOps() map[string]operations.CreateInterface {
+	if len(d.filterDIDs) == 0 {
+		return d.createOps
+	}
+
+	ops := map[string]operations.CreateInterface{}
+	for _, did := range d.filterDIDs {
+		if _, ok := d.createOps[did]; ok {
+			ops[did] = d.createOps[did]
+		}
+	}
+
+	return ops
+}
+
+func (d *OperationsProcessor) RecoverOps() map[string]operations.RecoverInterface {
+	if len(d.filterDIDs) == 0 {
+		return d.recoverOps
+	}
+
+	ops := map[string]operations.RecoverInterface{}
+	for _, did := range d.filterDIDs {
+		if _, ok := d.recoverOps[did]; ok {
+			ops[did] = d.recoverOps[did]
+		}
+	}
+
+	return ops
+}
+
+func (d *OperationsProcessor) UpdateOps() map[string]operations.UpdateInterface {
+	if len(d.filterDIDs) == 0 {
+		return d.updateOps
+	}
+
+	ops := map[string]operations.UpdateInterface{}
+	for _, did := range d.filterDIDs {
+		if _, ok := d.updateOps[did]; ok {
+			ops[did] = d.updateOps[did]
+		}
+	}
+
+	return ops
+}
+
+func (d *OperationsProcessor) DeactivateOps() map[string]operations.DeactivateInterface {
+	if len(d.filterDIDs) == 0 {
+		return d.deactivateOps
+	}
+
+	ops := map[string]operations.DeactivateInterface{}
+	for _, did := range d.filterDIDs {
+		if _, ok := d.deactivateOps[did]; ok {
+			ops[did] = d.deactivateOps[did]
+		}
+	}
+
+	return ops
 }
 
 func (d *OperationsProcessor) fetchCoreIndexFile() error {
 
 	if d.CoreIndexFileURI == "" {
-		return d.log.Errorf("core index file URI is empty")
+		return fmt.Errorf("core index file URI is empty")
 	}
 
-	coreData, err := d.casStore.GetGZip(d.CoreIndexFileURI)
+	coreData, err := d.cas.Get(d.CoreIndexFileURI)
 	if err != nil {
-		return d.log.Errorf("failed to get core index file: %w", err)
+		return fmt.Errorf("failed to get core index file: %w", err)
 	}
 
 	d.CoreIndexFile, err = NewCoreIndexFile(d, coreData)
 	if err != nil {
-		return d.log.Errorf("failed to create core index file: %w", err)
+		return fmt.Errorf("failed to create core index file: %w", err)
 	}
 
 	return nil
@@ -207,17 +355,17 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 func (d *OperationsProcessor) fetchCoreProofFile() error {
 
 	if d.CoreProofFileURI == "" {
-		return d.log.Errorf("core proof file URI is empty")
+		return fmt.Errorf("core proof file URI is empty")
 	}
 
-	coreProofData, err := d.casStore.GetGZip(d.CoreProofFileURI)
+	coreProofData, err := d.cas.Get(d.CoreProofFileURI)
 	if err != nil {
-		return d.log.Errorf("failed to get core proof file: %w", err)
+		return fmt.Errorf("failed to get core proof file: %w", err)
 	}
 
 	d.CoreProofFile, err = NewCoreProofFile(d, coreProofData)
 	if err != nil {
-		return d.log.Errorf("failed to create core proof file: %w", err)
+		return fmt.Errorf("failed to create core proof file: %w", err)
 	}
 
 	return nil
@@ -226,17 +374,17 @@ func (d *OperationsProcessor) fetchCoreProofFile() error {
 func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 
 	if d.ProvisionalIndexFileURI == "" {
-		return d.log.Errorf("no provisional index file URI")
+		return fmt.Errorf("no provisional index file URI")
 	}
 
-	provisionalData, err := d.casStore.GetGZip(d.ProvisionalIndexFileURI)
+	provisionalData, err := d.cas.Get(d.ProvisionalIndexFileURI)
 	if err != nil {
-		return d.log.Errorf("failed to get provisional index file: %w", err)
+		return fmt.Errorf("failed to get provisional index file: %w", err)
 	}
 
 	d.ProvisionalIndexFile, err = NewProvisionalIndexFile(d, provisionalData)
 	if err != nil {
-		return d.log.Errorf("failed to create provisional index file: %w", err)
+		return fmt.Errorf("failed to create provisional index file: %w", err)
 	}
 
 	return nil
@@ -245,77 +393,38 @@ func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 
 	if d.ProvisionalProofFileURI == "" {
-		return d.log.Errorf("no provisional proof file URI")
+		return fmt.Errorf("no provisional proof file URI")
 	}
 
-	provisionalProofData, err := d.casStore.GetGZip(d.ProvisionalProofFileURI)
+	provisionalProofData, err := d.cas.Get(d.ProvisionalProofFileURI)
 	if err != nil {
-		return d.log.Errorf("failed to get provisional proof file: %w", err)
+		return fmt.Errorf("failed to get provisional proof file: %w", err)
 	}
 
 	d.ProvisionalProofFile, err = NewProvisionalProofFile(d, provisionalProofData)
 	if err != nil {
-		return d.log.Errorf("failed to create provisional proof file: %w", err)
+		return fmt.Errorf("failed to create provisional proof file: %w", err)
 	}
 
 	return nil
 }
 
 func (d *OperationsProcessor) fetchChunkFile() error {
-
 	if d.ChunkFileURI == "" {
-		return d.log.Errorf("no chunk file URI")
+		return fmt.Errorf("no chunk file URI")
 	}
 
-	chunkData, err := d.casStore.GetGZip(d.ChunkFileURI)
+	chunkData, err := d.cas.Get(d.ChunkFileURI)
 	if err != nil {
-		return d.log.Errorf("failed to get chunk file: %w", err)
+		return fmt.Errorf("failed to get chunk file: %w", err)
 	}
 
 	d.ChunkFile, err = NewChunkFile(d, chunkData)
 	if err != nil {
-		return d.log.Errorf("failed to create chunk file: %w", err)
+		return fmt.Errorf("failed to create chunk file: %w", err)
 	}
 
 	return nil
-}
-
-func (d *OperationsProcessor) createDID(id string, recoverCommitment string) error {
-
-	didDoc := d.NewDIDDoc(id, recoverCommitment)
-	if err := d.didStore.Put(didDoc); err != nil {
-		return d.log.Errorf("failed to put did document: %w", err)
-	}
-
-	return nil
-}
-
-func (d *OperationsProcessor) setUpdateCommitment(id string, commitment string) error {
-	didDoc, err := d.didStore.Get(id)
-	if err != nil {
-		return fmt.Errorf("failed to get did doc for %s: %w", id, err)
-	}
-
-	didDoc.Metadata.Method.UpdateCommitment = commitment
-
-	if err := d.didStore.Put(didDoc); err != nil {
-		return fmt.Errorf("failed to put did document: %w", err)
-	}
-
-	return nil
-}
-
-func (d *OperationsProcessor) getUpdateCommitment(id string) (string, error) {
-	didDoc, err := d.didStore.Get(id)
-	if err != nil {
-		return "", fmt.Errorf("failed to get did doc for %s: %w", id, err)
-	}
-
-	if didDoc.Metadata.Method.UpdateCommitment == "" {
-		return "", fmt.Errorf("no update commitment for %s", id)
-	}
-
-	return didDoc.Metadata.Method.UpdateCommitment, nil
 }
 
 func (p *OperationsProcessor) populateDeltaMappingArray() error {
@@ -329,58 +438,27 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		return fmt.Errorf("provisional index file is nil")
 	}
 
-	p.createdDeltaHash = map[string]string{}
 	for _, op := range coreIndex.Operations.Create {
 		uri, err := op.SuffixData.URI()
 		if err != nil {
 			return fmt.Errorf("failed to get uri from create operation: %w", err)
 		}
 
-		if err := p.updateDIDOperations(uri); err != nil {
-			return fmt.Errorf("failed to update did operations: %w", err)
-		}
+		createOp := operations.CreateOperation(
+			op.SuffixData,
+		)
 
-		p.createdDeltaHash[uri] = op.SuffixData.DeltaHash
+		p.createOps[uri] = createOp
 		p.createMappingArray = append(p.createMappingArray, uri)
 	}
 
 	for _, op := range coreIndex.Operations.Recover {
-		if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
-			return fmt.Errorf("failed to update did operations: %w", err)
-		}
-
 		p.recoveryMappingArray = append(p.recoveryMappingArray, op.DIDSuffix)
 	}
 
 	for _, op := range provisionalIndex.Operations.Update {
-		if err := p.updateDIDOperations(op.DIDSuffix); err != nil {
-			return fmt.Errorf("failed to update did operations: %w", err)
-		}
 		p.updateMappingArray = append(p.updateMappingArray, op.DIDSuffix)
 	}
 
 	return nil
-}
-
-func (p *OperationsProcessor) updateDIDOperations(id string) error {
-
-	var err error
-	var ops []SideTreeOp
-	ops, err = p.indexStore.GetDIDOps(id)
-	if err != nil {
-		return fmt.Errorf("failed to get did operations: %w", err)
-	}
-
-	if !OpAlreadyExists(ops, p.op) {
-		ops = append(ops, p.op)
-		if err := p.indexStore.PutDIDOps(id, ops); err != nil {
-			return fmt.Errorf("failed to put did operations: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (d *OperationsProcessor) NewDIDDoc(id string, recoveryCommitment string) *did.Document {
-	return did.New(id, recoveryCommitment, d.prefix, true)
 }

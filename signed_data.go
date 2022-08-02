@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/13x-tech/sidetree-go/internal/keys"
-	"github.com/13x-tech/sidetree-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/crypto/util"
+	"github.com/13x-tech/ion-sdk-go/pkg/keys"
 
 	"github.com/gowebpki/jcs"
 )
@@ -60,7 +60,7 @@ func (s *SignedUpdateDataOp) ValidateReveal(revealValue string) (bool, error) {
 		return false, fmt.Errorf("failed to get key data: %w", err)
 	}
 
-	reveal, err := did.HashReveal(jsonKey)
+	reveal, err := util.HashReveal(jsonKey)
 	if err != nil {
 		return false, fmt.Errorf("failed to hash reveal value: %w", err)
 	}
@@ -150,7 +150,7 @@ func (s *SignedRecoverDataOp) ValidateReveal(revealValue string) (bool, error) {
 		return false, fmt.Errorf("failed to get key data: %w", err)
 	}
 
-	reveal, err := did.HashReveal(jsonKey)
+	reveal, err := util.HashReveal(jsonKey)
 	if err != nil {
 		return false, fmt.Errorf("failed to hash reveal value: %w", err)
 	}
@@ -232,7 +232,7 @@ func (s *SignedDeactivateDataOp) ValidateReveal(revealValue string) (bool, error
 		return false, fmt.Errorf("failed to get key data: %w", err)
 	}
 
-	reveal, err := did.HashReveal(jsonKey)
+	reveal, err := util.HashReveal(jsonKey)
 	if err != nil {
 		return false, fmt.Errorf("failed to hash reveal value: %w", err)
 	}
