@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
 type Closer struct{}
@@ -56,21 +58,18 @@ func (t *TestCASStorage) insertObject(id string, data []byte) error {
 	return nil
 }
 
-var storageTestOps = []SideTreeOp{
+var storageTestOps = []operations.Anchor{
 	{
-		SystemAnchorPoint: "1234:abcd:56:efgh:7",
-		AnchorString:      "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-		Processed:         false,
+		Sequence: "1234:abcd:56:efgh:7",
+		Anchor:   "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 	},
 	{
-		SystemAnchorPoint: "1234:efgh:75:efgh:7",
-		AnchorString:      "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-		Processed:         false,
+		Sequence: "1234:efgh:75:efgh:7",
+		Anchor:   "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 	},
 	{
-		SystemAnchorPoint: "1234:ijkl:89:efgh:7",
-		AnchorString:      "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-		Processed:         false,
+		Sequence: "1234:ijkl:89:efgh:7",
+		Anchor:   "1.QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 	},
 }
 

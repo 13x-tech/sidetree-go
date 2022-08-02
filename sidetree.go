@@ -2,6 +2,8 @@ package sidetree
 
 import (
 	"fmt"
+
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
 type SideTreeOption func(interface{})
@@ -94,11 +96,11 @@ type SideTree struct {
 	valueLockFn *ValueLocking
 }
 
-func (s *SideTree) ProcessOperations(ops []SideTreeOp, ids []string) (map[SideTreeOp]ProcessedOperations, error) {
+func (s *SideTree) ProcessOperations(ops []operations.Anchor, ids []string) (map[operations.Anchor]ProcessedOperations, error) {
 
 	//TODO Validate ids
 
-	opsMap := map[SideTreeOp]ProcessedOperations{}
+	opsMap := map[operations.Anchor]ProcessedOperations{}
 	for _, op := range ops {
 
 		processor, err := Processor(

@@ -6,7 +6,7 @@ import (
 	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
-func Processor(op SideTreeOp, options ...SideTreeOption) (*OperationsProcessor, error) {
+func Processor(op operations.Anchor, options ...SideTreeOption) (*OperationsProcessor, error) {
 
 	if op.CID() == "" {
 		return nil, fmt.Errorf("index URI is empty")
@@ -40,7 +40,7 @@ type OperationsProcessor struct {
 	cas        CAS
 	filterDIDs []string
 	method     string
-	op         SideTreeOp
+	op         operations.Anchor
 
 	CoreIndexFileURI string
 	CoreIndexFile    *CoreIndexFile
@@ -86,11 +86,11 @@ type ProcessedOperations struct {
 }
 
 func (b *OperationsProcessor) Anchor() string {
-	return b.op.AnchorString
+	return string(b.op.Anchor)
 }
 
 func (b *OperationsProcessor) SystemAnchor() string {
-	return b.op.SystemAnchorPoint
+	return string(b.op.Sequence)
 }
 
 func (d *OperationsProcessor) Process() ProcessedOperations {
@@ -124,13 +124,13 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 	// https://identity.foundation/sidetree/spec/#base-fee-variable
 	if d.baseFeeFn != nil {
 		baseFeeFn := *d.baseFeeFn
-		d.baseFee = baseFeeFn(d.op.Operations(), d.op.SystemAnchorPoint)
+		d.baseFee = baseFeeFn(d.op.Operations(), string(d.op.Sequence))
 	}
 
 	// https://identity.foundation/sidetree/spec/#per-operation-fee
 	if d.perOpFeeFn != nil {
 		perOpFeeFn := *d.perOpFeeFn
-		if !perOpFeeFn(d.baseFee, d.op.Operations(), d.op.SystemAnchorPoint) {
+		if !perOpFeeFn(d.baseFee, d.op.Operations(), string(d.op.Sequence)) {
 			ops.Error = fmt.Errorf("per op fee is not valid")
 			return ops
 		}
@@ -139,7 +139,7 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 	// https://identity.foundation/sidetree/spec/#value-locking
 	if d.valueLockFn != nil {
 		valueLockFn := *d.valueLockFn
-		if !valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, d.op.SystemAnchorPoint) {
+		if !valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, string(d.op.Sequence)) {
 			ops.Error = fmt.Errorf("value lock is not valid")
 			return ops
 		}
