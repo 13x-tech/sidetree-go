@@ -419,7 +419,10 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 		return fmt.Errorf("failed to get chunk file: %w", err)
 	}
 
-	d.ChunkFile, err = NewChunkFile(d, chunkData)
+	d.ChunkFile, err = NewChunkFile(chunkData,
+		WithMappingArrays(d.createMappingArray, d.recoveryMappingArray, d.updateMappingArray),
+		WithOperations(d.createOps, d.recoverOps, d.updateOps),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create chunk file: %w", err)
 	}

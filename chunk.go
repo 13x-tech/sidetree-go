@@ -2,24 +2,66 @@ package sidetree
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/13x-tech/ion-sdk-go/pkg/did"
+	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
-func NewChunkFile(processor *OperationsProcessor, data []byte) (*ChunkFile, error) {
+var (
+	ErrInvalidDeltaCount = errors.New("invalid delta count")
+)
+
+type ChunkOption func(c *ChunkFile)
+
+func WithMappingArrays(
+	createMappingArray []string,
+	recoverMappingArray []string,
+	updateMappingArray []string,
+) ChunkOption {
+	return func(c *ChunkFile) {
+		c.createMappingArray = createMappingArray
+		c.recoverMappingArray = recoverMappingArray
+		c.updateMappingArray = updateMappingArray
+	}
+}
+
+func WithOperations(
+	createOps map[string]operations.CreateInterface,
+	recoverOps map[string]operations.RecoverInterface,
+	updateOps map[string]operations.UpdateInterface,
+) ChunkOption {
+	return func(c *ChunkFile) {
+		c.createOps = createOps
+		c.recoverOps = recoverOps
+		c.updateOps = updateOps
+	}
+}
+
+func NewChunkFile(data []byte, opts ...ChunkOption) (*ChunkFile, error) {
 	var c ChunkFile
 	if err := json.Unmarshal(data, &c); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal chunk: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal: %w", err)
 	}
-	c.processor = processor
+
+	for _, opt := range opts {
+		opt(&c)
+	}
+
 	return &c, nil
 }
 
 type ChunkFile struct {
 	Deltas []did.Delta `json:"deltas"`
 
-	processor *OperationsProcessor
+	createMappingArray  []string
+	recoverMappingArray []string
+	updateMappingArray  []string
+
+	createOps  map[string]operations.CreateInterface
+	recoverOps map[string]operations.RecoverInterface
+	updateOps  map[string]operations.UpdateInterface
 }
 
 func (c *ChunkFile) Process() error {
@@ -34,18 +76,18 @@ func (c *ChunkFile) Process() error {
 	// Provisional Index File Update Entries into a single array, in that order,
 	// herein referred to as the Operation Delta Mapping Array
 	var mappingArray []string
-	if len(c.processor.createMappingArray) > 0 {
-		mappingArray = append(mappingArray, c.processor.createMappingArray...)
+	if len(c.createMappingArray) > 0 {
+		mappingArray = append(mappingArray, c.createMappingArray...)
 	}
-	if len(c.processor.recoveryMappingArray) > 0 {
-		mappingArray = append(mappingArray, c.processor.recoveryMappingArray...)
+	if len(c.recoverMappingArray) > 0 {
+		mappingArray = append(mappingArray, c.recoverMappingArray...)
 	}
-	if len(c.processor.updateMappingArray) > 0 {
-		mappingArray = append(mappingArray, c.processor.updateMappingArray...)
+	if len(c.updateMappingArray) > 0 {
+		mappingArray = append(mappingArray, c.updateMappingArray...)
 	}
 
-	if len(mappingArray) > len(c.Deltas) {
-		return fmt.Errorf("operation mapping array contains more entries than delta entries")
+	if len(mappingArray) != len(c.Deltas) {
+		return ErrInvalidDeltaCount
 	}
 
 	for i, delta := range c.Deltas {
@@ -57,11 +99,11 @@ func (c *ChunkFile) Process() error {
 }
 
 func (c *ChunkFile) setDelta(id string, delta did.Delta) {
-	if createOp, ok := c.processor.createOps[id]; ok {
+	if createOp, ok := c.createOps[id]; ok {
 		createOp.SetDelta(delta)
-	} else if recoverOp, ok := c.processor.recoverOps[id]; ok {
+	} else if recoverOp, ok := c.recoverOps[id]; ok {
 		recoverOp.SetDelta(delta)
-	} else if updateOp, ok := c.processor.updateOps[id]; ok {
+	} else if updateOp, ok := c.updateOps[id]; ok {
 		updateOp.SetDelta(delta)
 	}
 }
