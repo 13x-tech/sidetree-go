@@ -67,7 +67,6 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 		if err != nil {
 			return ErrURINotFound
 		}
-		fmt.Printf("URI: %s\n", uri)
 		if _, ok := c.suffixMap[uri]; ok {
 			return ErrDuplicateOperation
 		}

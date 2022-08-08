@@ -2,259 +2,277 @@ package sidetree
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/13x-tech/ion-sdk-go/pkg/did"
 )
 
-var testCoreFile = CoreIndexFile{
-	Operations: CoreOperations{
-		Create: []CreateOperation{},
-		Recover: []Operation{{
-			DIDSuffix: "abcdefg",
-		}},
-		Deactivate: []Operation{{
-			DIDSuffix: "abcdefg",
-		}},
-	},
+func TestBadOperationsData(t *testing.T) {
+	_, err := NewCoreIndexFile(nil, []byte("bad data"))
+	if err == nil {
+		t.Errorf("should have failed to create core index file")
+	}
 }
 
 func TestDuplicateOperations(t *testing.T) {
+	tests := map[string]struct {
+		create     []CreateOperation
+		recover    []Operation
+		deactivate []Operation
+		want       error
+	}{
+		"duplicate create": {
+			create: []CreateOperation{{
+				SuffixData: did.SuffixData{
+					DeltaHash:          "abc123",
+					RecoveryCommitment: "xyz789",
+				},
+			}, {
+				SuffixData: did.SuffixData{
+					DeltaHash:          "abc123",
+					RecoveryCommitment: "xyz789",
+				},
+			}},
+			want: ErrDuplicateOperation,
+		},
+		"duplicate recover": {
+			recover: []Operation{{
+				DIDSuffix: "abc123",
+			}, {
+				DIDSuffix: "abc123",
+			}},
+			want: ErrDuplicateOperation,
+		},
+		"duplicate deactivate": {
+			deactivate: []Operation{{
+				DIDSuffix: "abc123",
+			}, {
+				DIDSuffix: "abc123",
+			}},
+			want: ErrDuplicateOperation,
+		},
+		"duplicate mix": {
+			create: []CreateOperation{{
+				SuffixData: did.SuffixData{
+					DeltaHash:          "abc123",
+					RecoveryCommitment: "xyz789",
+				},
+			}, {
+				SuffixData: did.SuffixData{
+					DeltaHash:          "def456",
+					RecoveryCommitment: "uvw456",
+				},
+			}},
+			deactivate: []Operation{{
+				DIDSuffix: "abc123",
+			}, {
+				DIDSuffix: "EiAcia-ZeClGSDCnIi7WRip4sm-jF9QvmsR0QDpPn64Kyw",
+			}},
+			want: ErrDuplicateOperation,
+		},
+		"no duplicates": {
+			create: []CreateOperation{{
+				SuffixData: did.SuffixData{
+					DeltaHash:          "abc123",
+					RecoveryCommitment: "xyz789",
+				},
+			}, {
+				SuffixData: did.SuffixData{
+					DeltaHash:          "def456",
+					RecoveryCommitment: "uvw456",
+				},
+			}},
+			deactivate: []Operation{{
+				DIDSuffix: "abc123",
+			}, {
+				DIDSuffix: "def456",
+			}},
+			recover: []Operation{{
+				DIDSuffix: "xyz789",
+			}, {
+				DIDSuffix: "uvw456",
+			}},
+			want: nil,
+		},
+	}
 
-	t.Run("test duplicates", func(t *testing.T) {
-		t.Run("recover create", func(t *testing.T) {
+	t.Run("populateCoreOperationArray", func(t *testing.T) {
 
-			var testCoreFile = CoreIndexFile{
-				Operations: CoreOperations{
-					Create: []CreateOperation{
-						{
-							SuffixData: did.SuffixData{
-								DeltaHash:          "EiC9KeEZci-n4WSQAFHBfXbH-gjGCLRiwOwfn5oDM-ulfg",
-								RecoveryCommitment: "EiBZrU3AmONK1yieZzw_BsgGWKoidwEWaBifQXFsY2jLwQ",
-							},
-						},
+		for name, test := range tests {
+			t.Run(name, func(t *testing.T) {
+				testFile := CoreIndexFile{
+					Operations: CoreOperations{
+						Create:     test.create,
+						Recover:    test.recover,
+						Deactivate: test.deactivate,
 					},
-					Recover: []Operation{{
-						DIDSuffix: "EiDiWRhmzQnRS18dt5Pzqxo2YcxffJR6LiOQp5Fr1K2uCw",
-					}},
-					Deactivate: []Operation{},
-				},
-			}
+					CoreProofURI: "core-proof-uri",
+				}
 
-			testFileJSON, err := json.Marshal(testCoreFile)
-			if err != nil {
-				t.Errorf("Error marshalling test core file: %v", err)
-			}
+				coreJson, err := json.Marshal(testFile)
+				if err != nil {
+					t.Fatal("failed to marshal core index file: %w", err)
+				}
+				p := &OperationsProcessor{}
+				cif, err := NewCoreIndexFile(p, coreJson)
+				if err != nil {
+					t.Fatal("failed to create core index file: %w", err)
+				}
 
-			c, err := NewCoreIndexFile(nil, testFileJSON)
-			if err != nil {
-				t.Errorf("failed to create core index file: %v", err)
-			}
-
-			if err := c.populateCoreOperationArray(); err == nil {
-				t.Errorf("expected error when populating multiple core operations for the same id")
-			}
-		})
-		t.Run("recover & deactivate", func(t *testing.T) {
-
-			var testCoreFile = CoreIndexFile{
-				Operations: CoreOperations{
-					Create: []CreateOperation{},
-					Recover: []Operation{{
-						DIDSuffix: "abcdefg",
-					}},
-					Deactivate: []Operation{{
-						DIDSuffix: "abcdefg",
-					}},
-				},
-			}
-
-			testFileJSON, err := json.Marshal(testCoreFile)
-			if err != nil {
-				t.Errorf("Error marshalling test core file: %v", err)
-			}
-
-			c, err := NewCoreIndexFile(nil, testFileJSON)
-			if err != nil {
-				t.Errorf("failed to create core index file: %v", err)
-			}
-
-			if err := c.populateCoreOperationArray(); err == nil {
-				t.Errorf("expected error when populating multiple core operations for the same id")
-			}
-		})
-
-		t.Run("recover duplicate", func(t *testing.T) {
-
-			var testCoreFile = CoreIndexFile{
-				Operations: CoreOperations{
-					Create: []CreateOperation{},
-					Recover: []Operation{{
-						DIDSuffix: "abcdefg",
-					}, {
-						DIDSuffix: "abcdefg",
-					}},
-					Deactivate: []Operation{},
-				},
-			}
-
-			testFileJSON, err := json.Marshal(testCoreFile)
-			if err != nil {
-				t.Errorf("Error marshalling test core file: %v", err)
-				return
-			}
-
-			c, err := NewCoreIndexFile(nil, testFileJSON)
-			if err != nil {
-				t.Errorf("failed to create core index file: %v", err)
-				return
-			}
-
-			if err := c.populateCoreOperationArray(); err == nil {
-				t.Errorf("expected error when populating multiple core operations for the same id")
-				return
-			}
-		})
-	})
-
-	t.Run("no duplicates", func(t *testing.T) {
-		var testCoreFile = CoreIndexFile{
-			Operations: CoreOperations{
-				Create: []CreateOperation{},
-				Recover: []Operation{{
-					DIDSuffix: "abcdefg",
-				}},
-				Deactivate: []Operation{{
-					DIDSuffix: "hijklmn",
-				}},
-			},
-		}
-
-		testFileJSON, err := json.Marshal(testCoreFile)
-		if err != nil {
-			t.Errorf("Error marshalling test core file: %v", err)
-			return
-		}
-
-		c, err := NewCoreIndexFile(nil, testFileJSON)
-		if err != nil {
-			t.Errorf("failed to create core index file: %v", err)
-			return
-		}
-
-		if err := c.populateCoreOperationArray(); err != nil {
-			t.Errorf("failed to populate core operations array: %v", err)
-			return
+				if err := cif.Process(); errors.Unwrap(err) != test.want {
+					t.Errorf("got %v, want %v", err, test.want)
+				}
+			})
 		}
 	})
-
 }
 
 func TestCoreIndexProcess(t *testing.T) {
-	t.Run("test no proof", func(t *testing.T) {
-		t.Run("with deactivate operation", func(t *testing.T) {
-			testCoreIndex := CoreIndexFile{
-				Operations: CoreOperations{
-					Deactivate: []Operation{{}},
+
+	t.Run("test without proof uri", func(t *testing.T) {
+		tests := map[string]struct {
+			create     []CreateOperation
+			recover    []Operation
+			deactivate []Operation
+			coreProof  string
+			want       error
+		}{
+			"deactivate": {
+				deactivate: []Operation{{
+					DIDSuffix: "abc123",
+				}},
+				want: ErrNoCoreProof,
+			},
+			"recover": {
+				recover: []Operation{{
+					DIDSuffix: "abc123",
+				}},
+				want: ErrNoCoreProof,
+			},
+			"create": {
+				create: []CreateOperation{{
+					SuffixData: did.SuffixData{
+						DeltaHash:          "abc123",
+						RecoveryCommitment: "xyz789",
+					},
+				}},
+				want: nil,
+			},
+		}
+
+		for name, test := range tests {
+			t.Run(name, func(t *testing.T) {
+				testFile := CoreIndexFile{
+					Operations: CoreOperations{
+						Create:     test.create,
+						Recover:    test.recover,
+						Deactivate: test.deactivate,
+					},
+					CoreProofURI: test.coreProof,
+				}
+
+				coreJson, err := json.Marshal(testFile)
+				if err != nil {
+					t.Fatal("failed to marshal core index file: %w", err)
+				}
+				p := &OperationsProcessor{}
+				cif, err := NewCoreIndexFile(p, coreJson)
+				if err != nil {
+					t.Fatal("failed to create core index file: %w", err)
+				}
+				if err := cif.Process(); err != test.want {
+					t.Errorf("got %v, want %v", err, test.want)
+				}
+			})
+		}
+	})
+
+	t.Run("test setting processor uris", func(t *testing.T) {
+
+		t.Run("provisional index file", func(t *testing.T) {
+
+			tests := map[string]struct {
+				IndexURI string
+			}{
+				"with uri": {
+					IndexURI: "provisional-index-uri",
+				},
+				"without uri": {
+					IndexURI: "",
 				},
 			}
-			coreIndexJSON, err := json.Marshal(testCoreIndex)
-			if err != nil {
-				t.Errorf("Error marshalling test core index file: %v", err)
-				return
-			}
-			p := &OperationsProcessor{}
 
-			cif, err := NewCoreIndexFile(p, coreIndexJSON)
-			if err != nil {
-				t.Errorf("failed to create core index file: %v", err)
-				return
-			}
+			for name, test := range tests {
 
-			if err := cif.Process(); err == nil || err != ErrNoCoreProof {
-				t.Errorf("expected error when processing core index file without proof")
-				return
+				t.Run(name, func(t *testing.T) {
+					testCoreIndex := CoreIndexFile{
+						Operations:          CoreOperations{},
+						ProvisionalIndexURI: test.IndexURI,
+					}
+
+					coreIndexJSON, err := json.Marshal(testCoreIndex)
+					if err != nil {
+						t.Fatalf("Error marshalling test core index file: %v", err)
+					}
+					p := &OperationsProcessor{}
+
+					cif, err := NewCoreIndexFile(p, coreIndexJSON)
+					if err != nil {
+						t.Fatalf("failed to create core index file: %v", err)
+					}
+					if err := cif.Process(); err != nil {
+						t.Fatalf("unexpected error when processing file without operations or proofs: %v", err)
+					}
+
+					if p.ProvisionalIndexFileURI != test.IndexURI {
+						t.Fatalf("expected provisional index uri to be %s but got %s", test.IndexURI, p.ProvisionalIndexFileURI)
+					}
+				})
 			}
 		})
-		t.Run("without operations ", func(t *testing.T) {
-			testCoreIndex := CoreIndexFile{
-				Operations: CoreOperations{},
-			}
-			coreIndexJSON, err := json.Marshal(testCoreIndex)
-			if err != nil {
-				t.Errorf("Error marshalling test core index file: %v", err)
-				return
-			}
-			p := &OperationsProcessor{}
 
-			cif, err := NewCoreIndexFile(p, coreIndexJSON)
-			if err != nil {
-				t.Errorf("failed to create core index file: %v", err)
-				return
-			}
-
-			if err := cif.Process(); err != nil {
-				t.Errorf("unexpected error when processing file without operations or proofs")
-				return
-			}
-		})
-	})
-	t.Run("test setting processor uris", func(t *testing.T) {
-		t.Run("provisional index file", func(t *testing.T) {
-			testCoreIndex := CoreIndexFile{
-				Operations:          CoreOperations{},
-				ProvisionalIndexURI: "provisional-index-uri",
-			}
-			coreIndexJSON, err := json.Marshal(testCoreIndex)
-			if err != nil {
-				t.Errorf("Error marshalling test core index file: %v", err)
-				return
-			}
-			p := &OperationsProcessor{}
-
-			cif, err := NewCoreIndexFile(p, coreIndexJSON)
-			if err != nil {
-				t.Errorf("failed to create core index file: %v", err)
-				return
-			}
-			if err := cif.Process(); err != nil {
-				t.Errorf("unexpected error when processing file without operations or proofs: %v", err)
-				return
-			}
-
-			if p.ProvisionalIndexFileURI != "provisional-index-uri" {
-				t.Errorf("expected provisional index uri to be %s but got %s", "provisional-index-uri", p.ProvisionalIndexFileURI)
-				return
-			}
-
-		})
 		t.Run("core proof file", func(t *testing.T) {
-			testCoreIndex := CoreIndexFile{
-				Operations:   CoreOperations{},
-				CoreProofURI: "core-proof-uri",
-			}
-			coreIndexJSON, err := json.Marshal(testCoreIndex)
-			if err != nil {
-				t.Errorf("Error marshalling test core index file: %v", err)
-				return
-			}
-			p := &OperationsProcessor{}
-
-			cif, err := NewCoreIndexFile(p, coreIndexJSON)
-			if err != nil {
-				t.Errorf("failed to create core index file: %v", err)
-				return
-			}
-			if err := cif.Process(); err != nil {
-				t.Errorf("unexpected error when processing file without operations or proofs: %v", err)
-				return
+			tests := map[string]struct {
+				CoreProofURI string
+			}{
+				"with uri": {
+					CoreProofURI: "core-proof-uri",
+				},
+				"without uri": {
+					CoreProofURI: "",
+				},
 			}
 
-			if p.CoreProofFileURI != "core-proof-uri" {
-				t.Errorf("expected provisional index uri to be %s but got %s", "core-proof-uri", p.CoreProofFileURI)
-				return
-			}
+			for name, test := range tests {
+				t.Run(name, func(t *testing.T) {
 
+					testCoreIndex := CoreIndexFile{
+						Operations:   CoreOperations{},
+						CoreProofURI: test.CoreProofURI,
+					}
+					coreIndexJSON, err := json.Marshal(testCoreIndex)
+					if err != nil {
+						t.Errorf("Error marshalling test core index file: %v", err)
+						return
+					}
+					p := &OperationsProcessor{}
+
+					cif, err := NewCoreIndexFile(p, coreIndexJSON)
+					if err != nil {
+						t.Errorf("failed to create core index file: %v", err)
+						return
+					}
+					if err := cif.Process(); err != nil {
+						t.Errorf("unexpected error when processing file without operations or proofs: %v", err)
+						return
+					}
+					if p.CoreProofFileURI != test.CoreProofURI {
+						t.Errorf("expected provisional index uri to be %s but got %s", test.CoreProofURI, p.CoreProofFileURI)
+						return
+					}
+				})
+			}
 		})
 	})
 }
