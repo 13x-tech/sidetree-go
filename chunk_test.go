@@ -117,13 +117,13 @@ func TestChunkFileProcess(t *testing.T) {
 		testChunk := ChunkFile{
 			Deltas: []did.Delta{
 				{
-					UpdateCommitment: "abcdefg",
+					UpdateCommitment: "abc",
 				},
 				{
-					UpdateCommitment: "hijklmn",
+					UpdateCommitment: "def",
 				},
 				{
-					UpdateCommitment: "opqrstu",
+					UpdateCommitment: "xyz",
 				},
 			},
 		}
