@@ -9,20 +9,6 @@ import (
 	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
-var testChunk = ChunkFile{
-	Deltas: []did.Delta{
-		{
-			UpdateCommitment: "abcdefg",
-		},
-		{
-			UpdateCommitment: "hijklmn",
-		},
-		{
-			UpdateCommitment: "opqrstu",
-		},
-	},
-}
-
 type TestDeltaCreate struct {
 	t *TestSetDeltas
 	operations.CreateInterface
@@ -56,44 +42,68 @@ type TestSetDeltas struct {
 
 func TestChunkSetDelta(t *testing.T) {
 
-	index := []string{"x", "y", "z"}
+	tests := map[string]struct {
+		deltas []did.Delta
+		want   int
+	}{
+		"valid": {
+			deltas: []did.Delta{
+				{
+					UpdateCommitment: "abc",
+				},
+				{
+					UpdateCommitment: "def",
+				},
+				{
+					UpdateCommitment: "xyz",
+				},
+			},
+			want: 3,
+		},
+	}
 
-	t.Run("set delta", func(t *testing.T) {
-		d := &TestSetDeltas{}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			d := &TestSetDeltas{}
+			fileJSON, err := json.Marshal(struct {
+				Deltas []did.Delta `json:"deltas"`
+			}{
+				Deltas: test.deltas,
+			})
 
-		c, err := NewChunkFile(
-			[]byte(`{"deltas":[]}`),
-			WithOperations(map[string]operations.CreateInterface{
-				"x": &TestDeltaCreate{t: d},
-			}, map[string]operations.RecoverInterface{
-				"z": &TestDeltaRecover{t: d},
-			}, map[string]operations.UpdateInterface{
-				"y": &TestDeltaUpdate{t: d},
-			}),
-		)
-		if err != nil {
-			t.Errorf("failed to create chunk: %v", err)
-		}
-		for n, delta := range testChunk.Deltas {
-			c.setDelta(index[n], delta)
-		}
-		if d.setDeltaCount != len(testChunk.Deltas) {
-			t.Errorf("expected %d delta, got %d", len(testChunk.Deltas), len(c.Deltas))
-		}
-	})
+			if err != nil {
+				t.Errorf("failed to marshal test data: %v", err)
+			}
+
+			c, err := NewChunkFile(
+				[]byte(fileJSON),
+				WithMappingArrays([]string{"x"}, []string{"z"}, []string{"y"}),
+				WithOperations(map[string]operations.CreateInterface{
+					"x": &TestDeltaCreate{t: d},
+				}, map[string]operations.RecoverInterface{
+					"y": &TestDeltaRecover{t: d},
+				}, map[string]operations.UpdateInterface{
+					"z": &TestDeltaUpdate{t: d},
+				}),
+			)
+			if err != nil {
+				t.Fatalf("failed to create chunk: %v", err)
+			}
+
+			if err := c.Process(); err != nil {
+				t.Fatalf("failed to process chunk: %v", err)
+			}
+			if d.setDeltaCount != test.want {
+				t.Errorf("expected %d deltas to be set, got %d", test.want, d.setDeltaCount)
+			}
+		})
+	}
 }
 
 func TestChunkFileProcess(t *testing.T) {
 
-	testDataJSON, err := json.Marshal(testChunk)
-	if err != nil {
-		t.Errorf("failed to marshal test data: %v", err)
-	}
-
 	t.Run("process chunk invalid chunk file", func(t *testing.T) {
-		_, err := NewChunkFile(
-			[]byte(``),
-		)
+		_, err := NewChunkFile([]byte("invalid file"))
 		if err == nil {
 			t.Errorf("should have failed to process invalid json")
 		}
@@ -102,64 +112,79 @@ func TestChunkFileProcess(t *testing.T) {
 		}
 	})
 
-	t.Run("process chunk invalid mapping array count", func(t *testing.T) {
-		d := &TestSetDeltas{}
+	t.Run("mapping array error", func(t *testing.T) {
 
-		c, err := NewChunkFile(
-			testDataJSON,
-			WithMappingArrays([]string{}, []string{"z"}, []string{"y"}),
-			WithOperations(map[string]operations.CreateInterface{}, map[string]operations.RecoverInterface{
-				"z": &TestDeltaRecover{t: d},
-			}, map[string]operations.UpdateInterface{
-				"y": &TestDeltaUpdate{t: d},
-			}),
-		)
-		if err != nil {
-			t.Errorf("failed to create chunk: %v", err)
+		testChunk := ChunkFile{
+			Deltas: []did.Delta{
+				{
+					UpdateCommitment: "abcdefg",
+				},
+				{
+					UpdateCommitment: "hijklmn",
+				},
+				{
+					UpdateCommitment: "opqrstu",
+				},
+			},
 		}
 
-		err = c.Process()
-		if err == nil || err != ErrInvalidDeltaCount {
-			t.Errorf("expected error %v, got %v", ErrInvalidDeltaCount, err)
+		tests := map[string]struct {
+			file       ChunkFile
+			createOps  map[string]operations.CreateInterface
+			recoverOps map[string]operations.RecoverInterface
+			updateOps  map[string]operations.UpdateInterface
+			want       error
+		}{
+			"without create": {
+				file:       testChunk,
+				createOps:  map[string]operations.CreateInterface{},
+				recoverOps: map[string]operations.RecoverInterface{"y": &TestDeltaRecover{t: &TestSetDeltas{}}},
+				updateOps:  map[string]operations.UpdateInterface{"z": &TestDeltaUpdate{t: &TestSetDeltas{}}},
+				want:       ErrInvalidDeltaCount,
+			},
 		}
 
-	})
+		for name, test := range tests {
+			t.Run(name, func(t *testing.T) {
+				createMappingArray := func(maping map[string]operations.CreateInterface) []string {
+					ids := []string{}
+					for id, _ := range maping {
+						ids = append(ids, id)
+					}
+					return ids
+				}(test.createOps)
+				recoverMappingArray := func(maping map[string]operations.RecoverInterface) []string {
+					ids := []string{}
+					for id, _ := range maping {
+						ids = append(ids, id)
+					}
+					return ids
+				}(test.recoverOps)
+				updateMappingArray := func(maping map[string]operations.UpdateInterface) []string {
+					ids := []string{}
+					for id, _ := range maping {
+						ids = append(ids, id)
+					}
+					return ids
+				}(test.updateOps)
 
-	t.Run("process empty chunk", func(t *testing.T) {
+				chunkFile, err := json.Marshal(test.file)
+				if err != nil {
+					t.Fatalf("failed to marshal test data: %v", err)
+				}
 
-		c, err := NewChunkFile(
-			[]byte(`{"deltas":[]}`),
-		)
-		if err != nil {
-			t.Errorf("failed to create chunk: %v", err)
-		}
-
-		err = c.Process()
-		if err != nil {
-			t.Error("expected no error, got", err)
-		}
-	})
-
-	t.Run("process chunk", func(t *testing.T) {
-		d := &TestSetDeltas{}
-
-		c, err := NewChunkFile(
-			testDataJSON,
-			WithMappingArrays([]string{"x"}, []string{"z"}, []string{"y"}),
-			WithOperations(map[string]operations.CreateInterface{
-				"x": &TestDeltaCreate{t: d},
-			}, map[string]operations.RecoverInterface{
-				"z": &TestDeltaRecover{t: d},
-			}, map[string]operations.UpdateInterface{
-				"y": &TestDeltaUpdate{t: d},
-			}),
-		)
-		if err != nil {
-			t.Errorf("failed to create chunk: %v", err)
-		}
-
-		if err := c.Process(); err != nil {
-			t.Errorf("failed to process chunk: %v", err)
+				c, err := NewChunkFile(
+					chunkFile,
+					WithMappingArrays(createMappingArray, recoverMappingArray, updateMappingArray),
+					WithOperations(test.createOps, test.recoverOps, test.updateOps),
+				)
+				if err != nil {
+					t.Fatalf("failed to create chunk: %v", err)
+				}
+				if err := c.Process(); err != test.want {
+					t.Errorf("expected error %v, got %v", test.want, err)
+				}
+			})
 		}
 	})
 }
