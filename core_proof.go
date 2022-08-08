@@ -7,6 +7,10 @@ import (
 	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
+var (
+	ErrCoreProofCount = fmt.Errorf("core proof count mismatch")
+)
+
 func NewCoreProofFile(processor *OperationsProcessor, data []byte) (*CoreProofFile, error) {
 	var c CoreProofFile
 	if err := json.Unmarshal(data, &c); err != nil {
@@ -29,7 +33,7 @@ func (p *CoreProofFile) Process() error {
 
 	if len(p.Operations.Recover) != len(p.processor.CoreIndexFile.Operations.Recover) ||
 		len(p.Operations.Deactivate) != len(p.processor.CoreIndexFile.Operations.Deactivate) {
-		return fmt.Errorf("core proof and core index file do not match")
+		return ErrCoreProofCount
 	}
 
 	for i, op := range p.Operations.Recover {
