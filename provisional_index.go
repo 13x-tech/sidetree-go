@@ -5,6 +5,11 @@ import (
 	"fmt"
 )
 
+var (
+	ErrProvisionalProofURIEmpty = fmt.Errorf("provisional proof uri is empty")
+	ErrMultipleChunks           = fmt.Errorf("provisional index file contains more than one chunk")
+)
+
 func NewProvisionalIndexFile(processor *OperationsProcessor, data []byte) (*ProvisionalIndexFile, error) {
 	var p ProvisionalIndexFile
 	if err := json.Unmarshal(data, &p); err != nil {
@@ -42,7 +47,7 @@ func (p *ProvisionalIndexFile) Process() error {
 
 	// Version 1 of SideTree only contains a single chunk in the chunks array
 	if len(p.Chunks) != 1 {
-		return fmt.Errorf("provisional index file contains more than one chunk")
+		return ErrMultipleChunks
 	}
 
 	chunk := p.Chunks[0]
@@ -73,7 +78,7 @@ func (p *ProvisionalIndexFile) populateCoreOperationArray() error {
 	}
 
 	if len(p.Operations.Update) > 0 && p.ProvisionalProofURI == "" {
-		return fmt.Errorf("provisional proof uri is empty")
+		return ErrProvisionalProofURIEmpty
 	}
 
 	return nil
