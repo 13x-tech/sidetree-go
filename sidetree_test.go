@@ -8,16 +8,6 @@ import (
 	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
-func TestCASNilPanic(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic")
-		}
-	}()
-
-	New(WithCAS(nil))
-}
-
 func TestSideTreeOptions(t *testing.T) {
 	tests := map[string]struct {
 		method      string
@@ -117,7 +107,7 @@ func TestSideTreeProcessOperations(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			opMap, err := test.sidetree.ProcessOperations(test.ops, test.ids)
-			if err != test.wantErr && (err != nil && !strings.Contains(err.Error(), test.wantErr.Error())) {
+			if err != test.wantErr && (test.wantErr != nil && err != nil && !strings.Contains(err.Error(), test.wantErr.Error())) {
 				t.Fatalf("expected %v, got %v", test.wantErr, err)
 			}
 			if len(opMap) != test.want {

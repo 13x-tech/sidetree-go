@@ -31,10 +31,7 @@ func WithPrefix(prefix string) SideTreeOption {
 }
 
 func WithCAS(cas CAS) SideTreeOption {
-	if cas == nil {
-		panic("content addressed storage is nil")
-	}
-
+	//TODO return error?
 	return func(d interface{}) {
 		switch t := d.(type) {
 		case *SideTree:
@@ -42,7 +39,6 @@ func WithCAS(cas CAS) SideTreeOption {
 		case *OperationsProcessor:
 			t.cas = cas
 		}
-
 	}
 }
 
@@ -64,11 +60,11 @@ func WithFeeFunctions(feeFunctions ...interface{}) SideTreeOption {
 			for _, f := range feeFunctions {
 				switch fn := f.(type) {
 				case BaseFeeAlgorithm:
-					t.baseFeeFn = &fn
+					t.baseFeeFn = fn
 				case PerOperationFee:
-					t.perOpFeeFn = &fn
+					t.perOpFeeFn = fn
 				case ValueLocking:
-					t.valueLockFn = &fn
+					t.valueLockFn = fn
 				}
 			}
 		}

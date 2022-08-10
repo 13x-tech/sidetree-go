@@ -6,10 +6,15 @@ import (
 	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
-func Processor(op operations.Anchor, options ...SideTreeOption) (*OperationsProcessor, error) {
+var (
+	ErrInvalidMethod = fmt.Errorf("invalid method")
+	ErrInvalidCAS    = fmt.Errorf("invalid cas")
+	ErrEmptyURI      = fmt.Errorf("index anchor URI is empty")
+)
 
+func Processor(op operations.Anchor, options ...SideTreeOption) (*OperationsProcessor, error) {
 	if op.CID() == "" {
-		return nil, fmt.Errorf("index URI is empty")
+		return nil, ErrEmptyURI
 	}
 
 	d := &OperationsProcessor{
@@ -22,11 +27,11 @@ func Processor(op operations.Anchor, options ...SideTreeOption) (*OperationsProc
 	}
 
 	if d.method == "" {
-		return nil, fmt.Errorf("prefix is empty")
+		return nil, ErrInvalidMethod
 	}
 
 	if d.cas == nil {
-		return nil, fmt.Errorf("cas store is not set")
+		return nil, ErrInvalidCAS
 	}
 
 	if d.filterDIDs == nil {
@@ -68,9 +73,9 @@ type OperationsProcessor struct {
 	updateMappingArray   []string
 
 	//TODO These Don't actually do Anything Yet
-	baseFeeFn   *BaseFeeAlgorithm
-	perOpFeeFn  *PerOperationFee
-	valueLockFn *ValueLocking
+	baseFeeFn   BaseFeeAlgorithm
+	perOpFeeFn  PerOperationFee
+	valueLockFn ValueLocking
 
 	baseFee int
 }
@@ -127,14 +132,12 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 
 	// https://identity.foundation/sidetree/spec/#base-fee-variable
 	if d.baseFeeFn != nil {
-		baseFeeFn := *d.baseFeeFn
-		d.baseFee = baseFeeFn(d.op.Operations(), string(d.op.Sequence))
+		d.baseFee = d.baseFeeFn(d.op.Operations(), string(d.op.Sequence))
 	}
 
 	// https://identity.foundation/sidetree/spec/#per-operation-fee
 	if d.perOpFeeFn != nil {
-		perOpFeeFn := *d.perOpFeeFn
-		if !perOpFeeFn(d.baseFee, d.op.Operations(), string(d.op.Sequence)) {
+		if !d.perOpFeeFn(d.baseFee, d.op.Operations(), string(d.op.Sequence)) {
 			ops.Error = fmt.Errorf("per op fee is not valid")
 			return ops
 		}
@@ -142,8 +145,7 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 
 	// https://identity.foundation/sidetree/spec/#value-locking
 	if d.valueLockFn != nil {
-		valueLockFn := *d.valueLockFn
-		if !valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, string(d.op.Sequence)) {
+		if !d.valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, string(d.op.Sequence)) {
 			ops.Error = fmt.Errorf("value lock is not valid")
 			return ops
 		}
@@ -343,6 +345,7 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 	if err != nil {
 		return fmt.Errorf("failed to get core index file: %w", err)
 	}
+	fmt.Printf("core index file: %s\n", coreData)
 
 	d.CoreIndexFile, err = NewCoreIndexFile(d, coreData)
 	if err != nil {
