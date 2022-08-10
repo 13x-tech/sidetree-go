@@ -482,6 +482,701 @@ func TestProcessorProcess(t *testing.T) {
 				return cas
 			}(),
 		},
+		"duplicate create": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrDuplicateOperation,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{},
+				}
+
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				coreProof := CoreProofFile{
+					Operations: CoreProofOperations{},
+				}
+				cpJSON, err := json.Marshal(coreProof)
+				if err != nil {
+					t.Fatal("failed to marshal core proof")
+				}
+				cas.insertObject("core-proof-uri", cpJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations:          ProvOPS{},
+					Chunks:              []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					CoreProofURI:        "core-proof-uri",
+					Operations: CoreOperations{
+						Create: []CreateOperation{{
+							SuffixData: did.SuffixData{
+								DeltaHash:          "abc123",
+								RecoveryCommitment: "xyz789",
+							},
+						}, {
+							SuffixData: did.SuffixData{
+								DeltaHash:          "abc123",
+								RecoveryCommitment: "xyz789",
+							},
+						}},
+					},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"duplicate recover": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrDuplicateOperation,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{},
+				}
+
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				coreProof := CoreProofFile{
+					Operations: CoreProofOperations{
+						Recover: []SignedRecoverDataOp{{}, {}},
+					},
+				}
+				cpJSON, err := json.Marshal(coreProof)
+				if err != nil {
+					t.Fatal("failed to marshal core proof")
+				}
+				cas.insertObject("core-proof-uri", cpJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations:          ProvOPS{},
+					Chunks:              []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					CoreProofURI:        "core-proof-uri",
+					Operations: CoreOperations{
+						Recover: []Operation{{
+							DIDSuffix:   "abc123",
+							RevealValue: "reveal-value",
+						}, {
+							DIDSuffix:   "abc123",
+							RevealValue: "reveal-value",
+						}},
+					},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"duplicate update": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrDuplicateOperation,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{
+						Update: []SignedUpdateDataOp{{}, {}},
+					},
+				}
+
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}, {}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix: "abc123",
+						}, {
+							DIDSuffix: "abc123",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					Operations:          CoreOperations{},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"duplicate deactivate": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrDuplicateOperation,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				coreProof := CoreProofFile{
+					Operations: CoreProofOperations{
+						Deactivate: []SignedDeactivateDataOp{{}, {}},
+					},
+				}
+				cpJSON, err := json.Marshal(coreProof)
+				if err != nil {
+					t.Fatal("failed to marshal core proof")
+				}
+				cas.insertObject("core-proof-uri", cpJSON)
+
+				coreIndex := CoreIndexFile{
+					CoreProofURI: "core-proof-uri",
+					Operations: CoreOperations{
+						Deactivate: []Operation{{
+							DIDSuffix:   "abc123",
+							RevealValue: "reveal-value",
+						}, {
+							DIDSuffix:   "abc123",
+							RevealValue: "reveal-value",
+						}},
+					},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"duplicate create + update": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrDuplicateOperation,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{
+						Update: []SignedUpdateDataOp{{
+							SignedData: "signed-data",
+						}},
+					},
+				}
+
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}, {}, {}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix:   "EiAcia-ZeClGSDCnIi7WRip4sm-jF9QvmsR0QDpPn64Kyw",
+							RevealValue: "reveal-value",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					Operations: CoreOperations{
+						Create: []CreateOperation{{
+							SuffixData: did.SuffixData{
+								DeltaHash:          "def123",
+								RecoveryCommitment: "xyz789",
+							},
+						}, {
+							SuffixData: did.SuffixData{
+								DeltaHash:          "abc123",
+								RecoveryCommitment: "xyz789",
+							},
+						}},
+					},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"duplicate create + deactivate": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrDuplicateOperation,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}, {}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provIndex := ProvisionalIndexFile{
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreProof := CoreProofFile{
+					Operations: CoreProofOperations{
+						Deactivate: []SignedDeactivateDataOp{{}},
+					},
+				}
+
+				cpJSON, err := json.Marshal(coreProof)
+				if err != nil {
+					t.Fatal("failed to marshal core proof")
+				}
+				cas.insertObject("core-proof-uri", cpJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					CoreProofURI:        "core-proof-uri",
+					Operations: CoreOperations{
+						Create: []CreateOperation{{
+							SuffixData: did.SuffixData{
+								DeltaHash:          "def123",
+								RecoveryCommitment: "xyz789",
+							},
+						}, {
+							SuffixData: did.SuffixData{
+								DeltaHash:          "abc123",
+								RecoveryCommitment: "xyz789",
+							},
+						}},
+						Deactivate: []Operation{{
+							DIDSuffix: "EiAcia-ZeClGSDCnIi7WRip4sm-jF9QvmsR0QDpPn64Kyw",
+						}},
+					},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"duplicate create + recover": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrDuplicateOperation,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}, {}, {}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provIndex := ProvisionalIndexFile{
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreProof := CoreProofFile{
+					Operations: CoreProofOperations{
+						Recover: []SignedRecoverDataOp{{}},
+					},
+				}
+
+				cpJSON, err := json.Marshal(coreProof)
+				if err != nil {
+					t.Fatal("failed to marshal core proof")
+				}
+				cas.insertObject("core-proof-uri", cpJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					CoreProofURI:        "core-proof-uri",
+					Operations: CoreOperations{
+						Create: []CreateOperation{{
+							SuffixData: did.SuffixData{
+								DeltaHash:          "def123",
+								RecoveryCommitment: "xyz789",
+							},
+						}, {
+							SuffixData: did.SuffixData{
+								DeltaHash:          "abc123",
+								RecoveryCommitment: "xyz789",
+							},
+						}},
+						Recover: []Operation{{
+							DIDSuffix: "EiAcia-ZeClGSDCnIi7WRip4sm-jF9QvmsR0QDpPn64Kyw",
+						}},
+					},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"duplicate update + recover": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrDuplicateOperation,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}, {}, {}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{
+						Update: []SignedUpdateDataOp{{}, {}},
+					},
+				}
+
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix:   "xyz",
+							RevealValue: "reveal-value",
+						}, {
+							DIDSuffix:   "abc",
+							RevealValue: "reveal-value",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreProof := CoreProofFile{
+					Operations: CoreProofOperations{
+						Recover: []SignedRecoverDataOp{{}},
+					},
+				}
+
+				cpJSON, err := json.Marshal(coreProof)
+				if err != nil {
+					t.Fatal("failed to marshal core proof")
+				}
+				cas.insertObject("core-proof-uri", cpJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					CoreProofURI:        "core-proof-uri",
+					Operations: CoreOperations{
+						Recover: []Operation{{
+							DIDSuffix: "abc",
+						}},
+					},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"duplicate update + deactivate": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrDuplicateOperation,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}, {}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{
+						Update: []SignedUpdateDataOp{{}, {}},
+					},
+				}
+
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix:   "xyz",
+							RevealValue: "reveal-value",
+						}, {
+							DIDSuffix:   "abc",
+							RevealValue: "reveal-value",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreProof := CoreProofFile{
+					Operations: CoreProofOperations{
+						Deactivate: []SignedDeactivateDataOp{{}},
+					},
+				}
+
+				cpJSON, err := json.Marshal(coreProof)
+				if err != nil {
+					t.Fatal("failed to marshal core proof")
+				}
+				cas.insertObject("core-proof-uri", cpJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					CoreProofURI:        "core-proof-uri",
+					Operations: CoreOperations{
+						Deactivate: []Operation{{
+							DIDSuffix: "abc",
+						}},
+					},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"duplicate recover + deactivate": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrDuplicateOperation,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}, {}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provIndex := ProvisionalIndexFile{
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreProof := CoreProofFile{
+					Operations: CoreProofOperations{
+						Recover:    []SignedRecoverDataOp{{}, {}},
+						Deactivate: []SignedDeactivateDataOp{{}},
+					},
+				}
+
+				cpJSON, err := json.Marshal(coreProof)
+				if err != nil {
+					t.Fatal("failed to marshal core proof")
+				}
+				cas.insertObject("core-proof-uri", cpJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					CoreProofURI:        "core-proof-uri",
+					Operations: CoreOperations{
+						Recover: []Operation{{
+							DIDSuffix: "xyz",
+						}, {
+							DIDSuffix: "abc",
+						}},
+						Deactivate: []Operation{{
+							DIDSuffix: "abc",
+						}},
+					},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
 		"valid provisional index": {
 			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
 			want: ProcessedOperations{

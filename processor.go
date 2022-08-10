@@ -115,10 +115,6 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 		AnchorSequence: d.SystemAnchor(),
 	}
 
-	d.createMappingArray = []string{}
-	d.recoveryMappingArray = []string{}
-	d.updateMappingArray = []string{}
-
 	if err := d.fetchCoreIndexFile(); err != nil {
 		//TODO Define Errors
 		ops.Error = err
@@ -202,12 +198,6 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 		}
 	}
 
-	//Check for duplicate dids file invalid if duplicates exist
-	if d.hasDuplicateDIDs() {
-		ops.Error = fmt.Errorf("duplicate dids found")
-		return ops
-	}
-
 	return ProcessedOperations{
 		Error:          nil,
 		AnchorString:   d.Anchor(),
@@ -217,37 +207,6 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 		UpdateOps:      d.UpdateOps(),
 		DeactivateOps:  d.DeactivateOps(),
 	}
-}
-
-func (d *OperationsProcessor) hasDuplicateDIDs() bool {
-	dids := make(map[string]struct{})
-	for _, id := range d.createMappingArray {
-		if _, ok := dids[id]; ok {
-			return true
-		}
-		dids[id] = struct{}{}
-	}
-	for _, id := range d.updateMappingArray {
-		if _, ok := dids[id]; ok {
-			return true
-		}
-		dids[id] = struct{}{}
-	}
-	for _, id := range d.recoveryMappingArray {
-		if _, ok := dids[id]; ok {
-			return true
-		}
-		dids[id] = struct{}{}
-	}
-
-	for id, _ := range d.deactivateOps {
-		if _, ok := dids[id]; ok {
-			return true
-		}
-		dids[id] = struct{}{}
-	}
-
-	return false
 }
 
 func (d *OperationsProcessor) CreateOps() map[string]operations.CreateInterface {
