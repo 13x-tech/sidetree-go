@@ -8,6 +8,15 @@ import (
 	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
+func checkError(got error, want error) bool {
+	if want == nil {
+		return got == nil
+	} else if got == nil {
+		return false
+	}
+	return strings.Contains(got.Error(), want.Error())
+}
+
 func TestSideTreeOptions(t *testing.T) {
 	tests := map[string]struct {
 		method      string
@@ -107,7 +116,7 @@ func TestSideTreeProcessOperations(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			opMap, err := test.sidetree.ProcessOperations(test.ops, test.ids)
-			if err != test.wantErr && (test.wantErr != nil && err != nil && !strings.Contains(err.Error(), test.wantErr.Error())) {
+			if !checkError(err, test.wantErr) {
 				t.Fatalf("expected %v, got %v", test.wantErr, err)
 			}
 			if len(opMap) != test.want {

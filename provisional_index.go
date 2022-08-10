@@ -7,7 +7,7 @@ import (
 
 var (
 	ErrProvisionalProofURIEmpty = fmt.Errorf("provisional proof uri is empty")
-	ErrMultipleChunks           = fmt.Errorf("provisional index file contains more than one chunk")
+	ErrMultipleChunks           = fmt.Errorf("provisional index file contains invalid chunk count")
 )
 
 func NewProvisionalIndexFile(processor *OperationsProcessor, data []byte) (*ProvisionalIndexFile, error) {

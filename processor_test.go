@@ -1,10 +1,11 @@
 package sidetree
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 
+	"github.com/13x-tech/ion-sdk-go/pkg/did"
 	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
@@ -59,7 +60,7 @@ func TestProcessorOptions(t *testing.T) {
 					ValueLocking(func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool { return true }),
 				),
 			)
-			if err != test.want && (test.want != nil && err != nil && !strings.Contains(err.Error(), test.want.Error())) {
+			if !checkError(err, test.want) {
 				t.Errorf("expected error %v, got %v", test.want, err)
 			}
 		})
@@ -73,34 +74,476 @@ func TestProcessorProcess(t *testing.T) {
 		want         ProcessedOperations
 		cas          CAS
 	}{
-		"without fee functions": {
+		"with fee functions": {
 			anchor: operations.Anchor{Anchor: "1.abc"},
+			feeFunctions: []interface{}{
+				BaseFeeAlgorithm(func(opCount int, anchorPoint string) int { return 0 }),
+				PerOperationFee(func(baseFee int, opCount int, anchorPoint string) bool { return true }),
+				ValueLocking(func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool { return true }),
+			},
 			want: ProcessedOperations{
 				Error: nil,
 			},
 			cas: func() CAS {
 				cas := NewTestCAS()
-				cas.Put([]byte("{}"))
+				cas.insertObject("abc", []byte("{}"))
+				return cas
+			}(),
+		},
+		"per op fee returns false": {
+			anchor: operations.Anchor{Anchor: "1.abc"},
+			feeFunctions: []interface{}{
+				BaseFeeAlgorithm(func(opCount int, anchorPoint string) int { return 0 }),
+				PerOperationFee(func(baseFee int, opCount int, anchorPoint string) bool { return false }),
+				ValueLocking(func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool { return true }),
+			},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("per op fee is not valid"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+				cas.insertObject("abc", []byte("{}"))
+				return cas
+			}(),
+		},
+		"value locking returns false": {
+			anchor: operations.Anchor{Anchor: "1.abc"},
+			feeFunctions: []interface{}{
+				BaseFeeAlgorithm(func(opCount int, anchorPoint string) int { return 0 }),
+				PerOperationFee(func(baseFee int, opCount int, anchorPoint string) bool { return true }),
+				ValueLocking(func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool { return false }),
+			},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("value lock is not valid"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+				cas.insertObject("abc", []byte("{}"))
 				return cas
 			}(),
 		},
 		"index file found": {
-			anchor: operations.Anchor{Anchor: "1.44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"},
+			anchor: operations.Anchor{Anchor: "1.cas"},
 			want: ProcessedOperations{
 				Error: nil,
 			},
 			cas: func() CAS {
 				cas := NewTestCAS()
-				cas.Put([]byte("{}"))
+				cas.insertObject("cas", []byte("{}"))
 				return cas
 			}(),
 		},
 		"index file not found": {
-			anchor: operations.Anchor{Anchor: "1.44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"},
+			anchor: operations.Anchor{Anchor: "1.abc"},
 			want: ProcessedOperations{
-				Error: fmt.Errorf("no data found"),
+				Error: fmt.Errorf("failed to get core index file"),
 			},
 			cas: NewTestCAS(),
+		},
+		"invalid core index": {
+			anchor: operations.Anchor{Anchor: "1.abc"},
+			want: ProcessedOperations{
+				Error: ErrNoCoreProof,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				coreIndex := CoreIndexFile{
+					Operations: CoreOperations{
+						Recover: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+				}
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("abc", ciJSON)
+				return cas
+			}(),
+		},
+		"with core proof not found": {
+			anchor: operations.Anchor{Anchor: "1.abc"},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("failed to get core proof file"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				coreIndex := CoreIndexFile{
+					CoreProofURI: "core-proof-uri",
+					Operations: CoreOperations{
+						Recover: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+				}
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("abc", ciJSON)
+				return cas
+			}(),
+		},
+		"with core proof process error": {
+			anchor: operations.Anchor{Anchor: "1.abc"},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("core proof count mismatch"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				coreIndex := CoreIndexFile{
+					CoreProofURI: "xyz",
+					Operations: CoreOperations{
+						Recover: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+				}
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("abc", ciJSON)
+				cas.insertObject("xyz", []byte("{}"))
+				return cas
+			}(),
+		},
+		"cannot fetch provisional index": {
+			anchor: operations.Anchor{Anchor: "1.abc"},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("failed to get provisional index file"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "xyz",
+					Operations:          CoreOperations{},
+				}
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("abc", ciJSON)
+				return cas
+			}(),
+		},
+		"empty provisional index": {
+			anchor: operations.Anchor{Anchor: "1.abc"},
+			want: ProcessedOperations{
+				Error: ErrMultipleChunks,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "xyz",
+					Operations:          CoreOperations{},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("abc", ciJSON)
+				cas.insertObject("xyz", []byte("{}"))
+
+				return cas
+			}(),
+		},
+		"fetch provisional proof error": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("failed to get provisional proof file"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					Operations:          CoreOperations{},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"provisional proof process error": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrProofIndexMismatch,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{
+						Update: []SignedUpdateDataOp{},
+					},
+				}
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					Operations:          CoreOperations{},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"cannot fetch chunk": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("failed to get chunk file"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{
+						Update: []SignedUpdateDataOp{{
+							SignedData: "signed-data",
+						}},
+					},
+				}
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					Operations:          CoreOperations{},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"cannot process chunk": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: ErrInvalidDeltaCount,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{
+						Update: []SignedUpdateDataOp{{
+							SignedData: "signed-data",
+						}},
+					},
+				}
+
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					Operations:          CoreOperations{},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"valid provisional index": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: nil,
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{
+						Update: []SignedUpdateDataOp{{
+							SignedData: "signed-data",
+						}},
+					},
+				}
+
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+
+				chunk := ChunkFile{
+					Deltas: []did.Delta{{}},
+				}
+
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					t.Fatal("failed to marshal chunk")
+				}
+				cas.insertObject("chunk-uri", chunkJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					Operations:          CoreOperations{},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
 		},
 	}
 
@@ -118,8 +561,8 @@ func TestProcessorProcess(t *testing.T) {
 			}
 
 			got := p.Process()
-			if got.Error != test.want.Error && (test.want.Error != nil && err != nil && !strings.Contains(got.Error.Error(), test.want.Error.Error())) {
-				t.Fatalf("expected %v, got %v", test.want.Error, got.Error)
+			if !checkError(got.Error, test.want.Error) {
+				t.Errorf("expected error %v, got %v", test.want.Error, got.Error)
 			}
 
 		})

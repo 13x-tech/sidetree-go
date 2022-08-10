@@ -8,7 +8,6 @@ import (
 )
 
 func NewCoreIndexFile(processor *OperationsProcessor, data []byte) (*CoreIndexFile, error) {
-
 	c := CoreIndexFile{}
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal core index file: %w", err)

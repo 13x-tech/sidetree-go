@@ -125,11 +125,6 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 		return ops
 	}
 
-	if d.CoreIndexFile == nil {
-		ops.Error = fmt.Errorf("core index file is nil")
-		return ops
-	}
-
 	// https://identity.foundation/sidetree/spec/#base-fee-variable
 	if d.baseFeeFn != nil {
 		d.baseFee = d.baseFeeFn(d.op.Operations(), string(d.op.Sequence))
@@ -163,11 +158,6 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 			return ops
 		}
 
-		if d.CoreProofFile == nil {
-			ops.Error = fmt.Errorf("core proof file is nil")
-			return ops
-		}
-
 		if err := d.CoreProofFile.Process(); err != nil {
 			ops.Error = err
 			return ops
@@ -178,11 +168,6 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 
 		if err := d.fetchProvisionalIndexFile(); err != nil {
 			ops.Error = err
-			return ops
-		}
-
-		if d.ProvisionalIndexFile == nil {
-			ops.Error = fmt.Errorf("provisional index file is nil")
 			return ops
 		}
 
@@ -198,11 +183,6 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 				return ops
 			}
 
-			if d.ProvisionalProofFile == nil {
-				ops.Error = fmt.Errorf("provisional proof file is nil")
-				return ops
-			}
-
 			if err := d.ProvisionalProofFile.Process(); err != nil {
 				ops.Error = err
 				return ops
@@ -212,11 +192,6 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 		if len(d.ProvisionalIndexFile.Chunks) > 0 {
 			if err := d.fetchChunkFile(); err != nil {
 				ops.Error = err
-				return ops
-			}
-
-			if d.ChunkFile == nil {
-				ops.Error = fmt.Errorf("chunk file is nil")
 				return ops
 			}
 
@@ -340,12 +315,10 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 	if d.CoreIndexFileURI == "" {
 		return fmt.Errorf("core index file URI is empty")
 	}
-
 	coreData, err := d.cas.Get(d.CoreIndexFileURI)
 	if err != nil {
 		return fmt.Errorf("failed to get core index file: %w", err)
 	}
-	fmt.Printf("core index file: %s\n", coreData)
 
 	d.CoreIndexFile, err = NewCoreIndexFile(d, coreData)
 	if err != nil {

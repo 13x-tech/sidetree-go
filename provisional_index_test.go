@@ -199,7 +199,7 @@ func TestProcessProvisionalIndexFile(t *testing.T) {
 			if err != nil {
 				t.Fatalf("new provisional index error got %v, want no error", err)
 			}
-			if err := pi.Process(); err != test.want && (err != nil && !strings.Contains(err.Error(), test.want.Error())) {
+			if err := pi.Process(); !checkError(err, test.want) {
 				t.Errorf("process error got %v, want %v", err, test.want)
 			}
 
