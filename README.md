@@ -1,18 +1,8 @@
 # SideTree Go
 
-sidetree-go is a Go library for processing [SideTree](https://identity.foundation/sidetree/spec/) operations in either a wallet, light-node or full node scenario.
+This package has been broken down into a very small part of the overall SideTree protocol, focused on gathering the operation information from the CAS. No processing is done within this package currently. 
 
-## Work In Progress
-This is a pre-alpha work in progress and is !!not!! production ready.
-
-There may be major breaking changes continuously made until the package becomes more stable. If you'd like to contribute it would be a good idea to open an Issue so that I know what you're working on and avoid any conflicts and changes.
-
-I am looking for people interested in taking an active role in maintaining and contributing to this library, so feel free to reach out.
-
-
-
-## Contributing
-This is a work in progress, but pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+This package will be rolled up into a larger SideTree-toolkit module with small packages that can be used to build various implementation pieces related to the [SideTree](https://identity.foundation/sidetree/spec/) protocol.
 
 ## License
 [Apache-2](https://www.apache.org/licenses/LICENSE-2.0)
