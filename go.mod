@@ -4,7 +4,7 @@ go 1.17
 
 replace github.com/go-jose/go-jose/v3 v3.0.0 => github.com/13x-tech/go-jose/v3 v3.0.1-0.20220321223504-5b54fdf1b7df
 
-require github.com/gowebpki/jcs v1.0.0
+require github.com/gowebpki/jcs v1.0.0 // indirect
 
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect

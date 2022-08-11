@@ -7,6 +7,10 @@ import (
 	"github.com/13x-tech/ion-sdk-go/pkg/operations"
 )
 
+var (
+	ErrCoreProofCount = fmt.Errorf("core proof count mismatch")
+)
+
 func NewCoreProofFile(processor *OperationsProcessor, data []byte) (*CoreProofFile, error) {
 	var c CoreProofFile
 	if err := json.Unmarshal(data, &c); err != nil {
@@ -27,18 +31,18 @@ func (p *CoreProofFile) Process() error {
 	// p.processor.log.Infof("Processing core proof file %s", p.processor.CoreProofFileURI)
 	//TODO Check Max Core Proof File Size
 
-	if len(p.Operations.Recover) != len(p.processor.CoreIndexFile.Operations.Recover) ||
-		len(p.Operations.Deactivate) != len(p.processor.CoreIndexFile.Operations.Deactivate) {
-		return fmt.Errorf("core proof and core index file do not match")
+	if len(p.Operations.Recover) != len(p.processor.coreIndexFile.Operations.Recover) ||
+		len(p.Operations.Deactivate) != len(p.processor.coreIndexFile.Operations.Deactivate) {
+		return ErrCoreProofCount
 	}
 
 	for i, op := range p.Operations.Recover {
-		coreOp := p.processor.CoreIndexFile.Operations.Recover[i]
+		coreOp := p.processor.coreIndexFile.Operations.Recover[i]
 		p.setRecoverOp(coreOp.DIDSuffix, coreOp.RevealValue, op)
 	}
 
 	for i, op := range p.Operations.Deactivate {
-		coreOp := p.processor.CoreIndexFile.Operations.Deactivate[i]
+		coreOp := p.processor.coreIndexFile.Operations.Deactivate[i]
 		p.setDeactivateOp(coreOp.DIDSuffix, coreOp.RevealValue, op)
 	}
 

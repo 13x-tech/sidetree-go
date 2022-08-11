@@ -5,6 +5,11 @@ import (
 	"fmt"
 )
 
+var (
+	ErrProvisionalProofURIEmpty = fmt.Errorf("provisional proof uri is empty")
+	ErrMultipleChunks           = fmt.Errorf("provisional index file contains invalid chunk count")
+)
+
 func NewProvisionalIndexFile(processor *OperationsProcessor, data []byte) (*ProvisionalIndexFile, error) {
 	var p ProvisionalIndexFile
 	if err := json.Unmarshal(data, &p); err != nil {
@@ -28,7 +33,7 @@ func (p *ProvisionalIndexFile) Process() error {
 
 	// TODO Check Max Provisional Index File Size
 
-	p.processor.ProvisionalProofFileURI = p.ProvisionalProofURI
+	p.processor.provisionalProofFileURI = p.ProvisionalProofURI
 
 	if err := p.processor.populateDeltaMappingArray(); err != nil {
 		return fmt.Errorf("failed to populate delta mapping array: %w", err)
@@ -42,7 +47,7 @@ func (p *ProvisionalIndexFile) Process() error {
 
 	// Version 1 of SideTree only contains a single chunk in the chunks array
 	if len(p.Chunks) != 1 {
-		return fmt.Errorf("provisional index file contains more than one chunk")
+		return ErrMultipleChunks
 	}
 
 	chunk := p.Chunks[0]
@@ -50,7 +55,7 @@ func (p *ProvisionalIndexFile) Process() error {
 		return fmt.Errorf("chunk file uri is empty")
 	}
 
-	p.processor.ChunkFileURI = chunk.ChunkFileURI
+	p.processor.chunkFileURI = chunk.ChunkFileURI
 
 	return nil
 }
@@ -65,15 +70,15 @@ func (p *ProvisionalIndexFile) setRevealValues() {
 func (p *ProvisionalIndexFile) populateCoreOperationArray() error {
 
 	for _, op := range p.Operations.Update {
-		if _, ok := p.processor.CoreIndexFile.suffixMap[op.DIDSuffix]; ok {
+		if _, ok := p.processor.coreIndexFile.suffixMap[op.DIDSuffix]; ok {
 			return ErrDuplicateOperation
 		}
 
-		p.processor.CoreIndexFile.suffixMap[op.DIDSuffix] = struct{}{}
+		p.processor.coreIndexFile.suffixMap[op.DIDSuffix] = struct{}{}
 	}
 
 	if len(p.Operations.Update) > 0 && p.ProvisionalProofURI == "" {
-		return fmt.Errorf("provisional proof uri is empty")
+		return ErrProvisionalProofURIEmpty
 	}
 
 	return nil
