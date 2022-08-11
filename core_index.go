@@ -36,12 +36,12 @@ func (c *CoreIndexFile) Process() error {
 
 	//TODO Check Max Core Index File Size
 
-	c.processor.ProvisionalIndexFileURI = c.ProvisionalIndexURI
+	c.processor.provisionalIndexFileURI = c.ProvisionalIndexURI
 
 	if (len(c.Operations.Deactivate) > 0 || len(c.Operations.Recover) > 0) && c.CoreProofURI == "" {
 		return ErrNoCoreProof
 	}
-	c.processor.CoreProofFileURI = c.CoreProofURI
+	c.processor.coreProofFileURI = c.CoreProofURI
 
 	if err := c.populateCoreOperationArray(); err != nil {
 		return fmt.Errorf("failed to populate core operations array: %w", err)
@@ -62,10 +62,7 @@ func (c *CoreIndexFile) populateCoreOperationArray() error {
 	c.suffixMap = map[string]struct{}{}
 
 	for _, op := range c.Operations.Create {
-		uri, err := op.SuffixData.URI()
-		if err != nil {
-			return ErrURINotFound
-		}
+		uri, _ := op.SuffixData.URI()
 		if _, ok := c.suffixMap[uri]; ok {
 			return ErrDuplicateOperation
 		}

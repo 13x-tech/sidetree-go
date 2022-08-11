@@ -70,7 +70,7 @@ func TestProvProofProcess(t *testing.T) {
 			p := &OperationsProcessor{
 				updateOps:          map[string]operations.UpdateInterface{},
 				updateMappingArray: test.updateMapping,
-				ProvisionalIndexFile: &ProvisionalIndexFile{
+				provisionalIndexFile: &ProvisionalIndexFile{
 					Operations: ProvOPS{
 						Update: test.provUpdates,
 					},
@@ -128,7 +128,7 @@ func TestProvProofSetUpdateOp(t *testing.T) {
 			p := &OperationsProcessor{
 				updateOps:          map[string]operations.UpdateInterface{},
 				updateMappingArray: test.updateMapping,
-				ProvisionalIndexFile: &ProvisionalIndexFile{
+				provisionalIndexFile: &ProvisionalIndexFile{
 					revealValues: test.revealValues,
 				},
 			}

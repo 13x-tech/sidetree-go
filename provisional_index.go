@@ -33,7 +33,7 @@ func (p *ProvisionalIndexFile) Process() error {
 
 	// TODO Check Max Provisional Index File Size
 
-	p.processor.ProvisionalProofFileURI = p.ProvisionalProofURI
+	p.processor.provisionalProofFileURI = p.ProvisionalProofURI
 
 	if err := p.processor.populateDeltaMappingArray(); err != nil {
 		return fmt.Errorf("failed to populate delta mapping array: %w", err)
@@ -55,7 +55,7 @@ func (p *ProvisionalIndexFile) Process() error {
 		return fmt.Errorf("chunk file uri is empty")
 	}
 
-	p.processor.ChunkFileURI = chunk.ChunkFileURI
+	p.processor.chunkFileURI = chunk.ChunkFileURI
 
 	return nil
 }
@@ -70,11 +70,11 @@ func (p *ProvisionalIndexFile) setRevealValues() {
 func (p *ProvisionalIndexFile) populateCoreOperationArray() error {
 
 	for _, op := range p.Operations.Update {
-		if _, ok := p.processor.CoreIndexFile.suffixMap[op.DIDSuffix]; ok {
+		if _, ok := p.processor.coreIndexFile.suffixMap[op.DIDSuffix]; ok {
 			return ErrDuplicateOperation
 		}
 
-		p.processor.CoreIndexFile.suffixMap[op.DIDSuffix] = struct{}{}
+		p.processor.coreIndexFile.suffixMap[op.DIDSuffix] = struct{}{}
 	}
 
 	if len(p.Operations.Update) > 0 && p.ProvisionalProofURI == "" {

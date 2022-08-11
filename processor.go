@@ -19,7 +19,7 @@ func Processor(op operations.Anchor, options ...SideTreeOption) (*OperationsProc
 
 	d := &OperationsProcessor{
 		op:               op,
-		CoreIndexFileURI: op.CID(),
+		coreIndexFileURI: op.CID(),
 	}
 
 	for _, option := range options {
@@ -47,21 +47,21 @@ type OperationsProcessor struct {
 	method     string
 	op         operations.Anchor
 
-	CoreIndexFileURI string
-	CoreIndexFile    *CoreIndexFile
+	coreIndexFileURI string
+	coreIndexFile    *CoreIndexFile
 
-	CoreProofFileURI string
-	CoreProofFile    *CoreProofFile
+	coreProofFileURI string
+	coreProofFile    *CoreProofFile
 
-	ProvisionalIndexFileURI string
-	ProvisionalIndexFile    *ProvisionalIndexFile
+	provisionalIndexFileURI string
+	provisionalIndexFile    *ProvisionalIndexFile
 
-	ProvisionalProofFileURI string
-	ProvisionalProofFile    *ProvisionalProofFile
+	provisionalProofFileURI string
+	provisionalProofFile    *ProvisionalProofFile
 
 	// Version 1 only has a single Chunk file No need for Array here yet
-	ChunkFileURI string
-	ChunkFile    *ChunkFile
+	chunkFileURI string
+	chunkFile    *ChunkFile
 
 	createOps     map[string]operations.CreateInterface
 	updateOps     map[string]operations.UpdateInterface
@@ -136,62 +136,62 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 
 	// https://identity.foundation/sidetree/spec/#value-locking
 	if d.valueLockFn != nil {
-		if !d.valueLockFn(d.CoreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, string(d.op.Sequence)) {
+		if !d.valueLockFn(d.coreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, string(d.op.Sequence)) {
 			ops.Error = fmt.Errorf("value lock is not valid")
 			return ops
 		}
 	}
 
-	if err := d.CoreIndexFile.Process(); err != nil {
+	if err := d.coreIndexFile.Process(); err != nil {
 		ops.Error = err
 		return ops
 	}
 
-	if d.CoreProofFileURI != "" {
+	if d.coreProofFileURI != "" {
 
 		if err := d.fetchCoreProofFile(); err != nil {
 			ops.Error = err
 			return ops
 		}
 
-		if err := d.CoreProofFile.Process(); err != nil {
+		if err := d.coreProofFile.Process(); err != nil {
 			ops.Error = err
 			return ops
 		}
 	}
 
-	if d.ProvisionalIndexFileURI != "" {
+	if d.provisionalIndexFileURI != "" {
 
 		if err := d.fetchProvisionalIndexFile(); err != nil {
 			ops.Error = err
 			return ops
 		}
 
-		if err := d.ProvisionalIndexFile.Process(); err != nil {
+		if err := d.provisionalIndexFile.Process(); err != nil {
 			ops.Error = err
 			return ops
 		}
 
-		if len(d.ProvisionalIndexFile.Operations.Update) > 0 {
+		if len(d.provisionalIndexFile.Operations.Update) > 0 {
 
 			if err := d.fetchProvisionalProofFile(); err != nil {
 				ops.Error = err
 				return ops
 			}
 
-			if err := d.ProvisionalProofFile.Process(); err != nil {
+			if err := d.provisionalProofFile.Process(); err != nil {
 				ops.Error = err
 				return ops
 			}
 		}
 
-		if len(d.ProvisionalIndexFile.Chunks) > 0 {
+		if len(d.provisionalIndexFile.Chunks) > 0 {
 			if err := d.fetchChunkFile(); err != nil {
 				ops.Error = err
 				return ops
 			}
 
-			if err := d.ChunkFile.Process(); err != nil {
+			if err := d.chunkFile.Process(); err != nil {
 				ops.Error = err
 				return ops
 			}
@@ -271,15 +271,12 @@ func (d *OperationsProcessor) DeactivateOps() map[string]operations.DeactivateIn
 
 func (d *OperationsProcessor) fetchCoreIndexFile() error {
 
-	if d.CoreIndexFileURI == "" {
-		return fmt.Errorf("core index file URI is empty")
-	}
-	coreData, err := d.cas.Get(d.CoreIndexFileURI)
+	coreData, err := d.cas.Get(d.coreIndexFileURI)
 	if err != nil {
 		return fmt.Errorf("failed to get core index file: %w", err)
 	}
 
-	d.CoreIndexFile, err = NewCoreIndexFile(d, coreData)
+	d.coreIndexFile, err = NewCoreIndexFile(d, coreData)
 	if err != nil {
 		return fmt.Errorf("failed to create core index file: %w", err)
 	}
@@ -289,16 +286,12 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 
 func (d *OperationsProcessor) fetchCoreProofFile() error {
 
-	if d.CoreProofFileURI == "" {
-		return fmt.Errorf("core proof file URI is empty")
-	}
-
-	coreProofData, err := d.cas.Get(d.CoreProofFileURI)
+	coreProofData, err := d.cas.Get(d.coreProofFileURI)
 	if err != nil {
 		return fmt.Errorf("failed to get core proof file: %w", err)
 	}
 
-	d.CoreProofFile, err = NewCoreProofFile(d, coreProofData)
+	d.coreProofFile, err = NewCoreProofFile(d, coreProofData)
 	if err != nil {
 		return fmt.Errorf("failed to create core proof file: %w", err)
 	}
@@ -308,16 +301,12 @@ func (d *OperationsProcessor) fetchCoreProofFile() error {
 
 func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 
-	if d.ProvisionalIndexFileURI == "" {
-		return fmt.Errorf("no provisional index file URI")
-	}
-
-	provisionalData, err := d.cas.Get(d.ProvisionalIndexFileURI)
+	provisionalData, err := d.cas.Get(d.provisionalIndexFileURI)
 	if err != nil {
 		return fmt.Errorf("failed to get provisional index file: %w", err)
 	}
 
-	d.ProvisionalIndexFile, err = NewProvisionalIndexFile(d, provisionalData)
+	d.provisionalIndexFile, err = NewProvisionalIndexFile(d, provisionalData)
 	if err != nil {
 		return fmt.Errorf("failed to create provisional index file: %w", err)
 	}
@@ -327,16 +316,12 @@ func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 
 func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 
-	if d.ProvisionalProofFileURI == "" {
-		return fmt.Errorf("no provisional proof file URI")
-	}
-
-	provisionalProofData, err := d.cas.Get(d.ProvisionalProofFileURI)
+	provisionalProofData, err := d.cas.Get(d.provisionalProofFileURI)
 	if err != nil {
 		return fmt.Errorf("failed to get provisional proof file: %w", err)
 	}
 
-	d.ProvisionalProofFile, err = NewProvisionalProofFile(d, provisionalProofData)
+	d.provisionalProofFile, err = NewProvisionalProofFile(d, provisionalProofData)
 	if err != nil {
 		return fmt.Errorf("failed to create provisional proof file: %w", err)
 	}
@@ -345,16 +330,13 @@ func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 }
 
 func (d *OperationsProcessor) fetchChunkFile() error {
-	if d.ChunkFileURI == "" {
-		return fmt.Errorf("no chunk file URI")
-	}
 
-	chunkData, err := d.cas.Get(d.ChunkFileURI)
+	chunkData, err := d.cas.Get(d.chunkFileURI)
 	if err != nil {
 		return fmt.Errorf("failed to get chunk file: %w", err)
 	}
 
-	d.ChunkFile, err = NewChunkFile(chunkData,
+	d.chunkFile, err = NewChunkFile(chunkData,
 		WithMappingArrays(d.createMappingArray, d.recoveryMappingArray, d.updateMappingArray),
 		WithOperations(d.createOps, d.recoverOps, d.updateOps),
 	)
@@ -366,21 +348,14 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 }
 
 func (p *OperationsProcessor) populateDeltaMappingArray() error {
-	coreIndex := p.CoreIndexFile
-	if coreIndex == nil {
-		return fmt.Errorf("core index file is nil")
-	}
 
-	provisionalIndex := p.ProvisionalIndexFile
+	provisionalIndex := p.provisionalIndexFile
 	if provisionalIndex == nil {
 		return fmt.Errorf("provisional index file is nil")
 	}
 
-	for _, op := range coreIndex.Operations.Create {
-		uri, err := op.SuffixData.URI()
-		if err != nil {
-			return fmt.Errorf("failed to get uri from create operation: %w", err)
-		}
+	for _, op := range p.coreIndexFile.Operations.Create {
+		uri, _ := op.SuffixData.URI()
 
 		createOp := operations.CreateOperation(
 			op.SuffixData,
@@ -390,7 +365,7 @@ func (p *OperationsProcessor) populateDeltaMappingArray() error {
 		p.createMappingArray = append(p.createMappingArray, uri)
 	}
 
-	for _, op := range coreIndex.Operations.Recover {
+	for _, op := range p.coreIndexFile.Operations.Recover {
 		p.recoveryMappingArray = append(p.recoveryMappingArray, op.DIDSuffix)
 	}
 

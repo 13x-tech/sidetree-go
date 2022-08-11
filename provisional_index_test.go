@@ -74,7 +74,7 @@ func TestCoreOperationsArray(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			p := &OperationsProcessor{
-				CoreIndexFile: &CoreIndexFile{
+				coreIndexFile: &CoreIndexFile{
 					suffixMap: test.suffixMap,
 				},
 			}
@@ -181,10 +181,10 @@ func TestProcessProvisionalIndexFile(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			p := &OperationsProcessor{
-				CoreIndexFile: &CoreIndexFile{
+				coreIndexFile: &CoreIndexFile{
 					suffixMap: map[string]struct{}{},
 				},
-				ProvisionalIndexFile: test.IndexFile,
+				provisionalIndexFile: test.IndexFile,
 			}
 			jsonData, err := json.Marshal(ProvisionalIndexFile{
 				ProvisionalProofURI: test.ProofURI,

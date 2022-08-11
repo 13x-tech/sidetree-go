@@ -140,6 +140,17 @@ func TestProcessorProcess(t *testing.T) {
 			},
 			cas: NewTestCAS(),
 		},
+		"bad core index data": {
+			anchor: operations.Anchor{Anchor: "1.abc"},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("failed to create core index file"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+				cas.insertObject("abc", []byte("bad data"))
+				return cas
+			}(),
+		},
 		"invalid core index": {
 			anchor: operations.Anchor{Anchor: "1.abc"},
 			want: ProcessedOperations{
@@ -171,6 +182,32 @@ func TestProcessorProcess(t *testing.T) {
 			},
 			cas: func() CAS {
 				cas := NewTestCAS()
+
+				coreIndex := CoreIndexFile{
+					CoreProofURI: "core-proof-uri",
+					Operations: CoreOperations{
+						Recover: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+				}
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("abc", ciJSON)
+				return cas
+			}(),
+		},
+		"bad core proof data": {
+			anchor: operations.Anchor{Anchor: "1.abc"},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("failed to create core proof file"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+				cas.insertObject("core-proof-uri", []byte("bad data"))
 
 				coreIndex := CoreIndexFile{
 					CoreProofURI: "core-proof-uri",
@@ -235,6 +272,26 @@ func TestProcessorProcess(t *testing.T) {
 				return cas
 			}(),
 		},
+		"bad provisional index data": {
+			anchor: operations.Anchor{Anchor: "1.abc"},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("failed to create provisional index file"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+				cas.insertObject("xyz", []byte("bad data"))
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "xyz",
+					Operations:          CoreOperations{},
+				}
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("abc", ciJSON)
+				return cas
+			}(),
+		},
 		"empty provisional index": {
 			anchor: operations.Anchor{Anchor: "1.abc"},
 			want: ProcessedOperations{
@@ -275,6 +332,47 @@ func TestProcessorProcess(t *testing.T) {
 					t.Fatal("failed to marshal chunk")
 				}
 				cas.insertObject("chunk-uri", chunkJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					Operations:          CoreOperations{},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"provisional proof bad data": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("failed to create provisional proof file"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				cas.insertObject("prov-proof-uri", []byte("bad data"))
 
 				provIndex := ProvisionalIndexFile{
 					ProvisionalProofURI: "prov-proof-uri",
@@ -387,6 +485,59 @@ func TestProcessorProcess(t *testing.T) {
 					t.Fatal("failed to marshal provisional proof")
 				}
 				cas.insertObject("prov-proof-uri", ppJSON)
+
+				provIndex := ProvisionalIndexFile{
+					ProvisionalProofURI: "prov-proof-uri",
+					Operations: ProvOPS{
+						Update: []Operation{{
+							DIDSuffix:   "did:abc:123",
+							RevealValue: "reveal-value",
+						}},
+					},
+					Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+				}
+
+				piJSON, err := json.Marshal(provIndex)
+				if err != nil {
+					t.Fatal("failed to marshal provisional index")
+				}
+				cas.insertObject("prov-index-uri", piJSON)
+
+				coreIndex := CoreIndexFile{
+					ProvisionalIndexURI: "prov-index-uri",
+					Operations:          CoreOperations{},
+				}
+
+				ciJSON, err := json.Marshal(coreIndex)
+				if err != nil {
+					t.Fatal("failed to marshal core index")
+				}
+				cas.insertObject("core-index-uri", ciJSON)
+
+				return cas
+			}(),
+		},
+		"bad chunk data": {
+			anchor: operations.Anchor{Anchor: "1.core-index-uri"},
+			want: ProcessedOperations{
+				Error: fmt.Errorf("failed to create chunk file"),
+			},
+			cas: func() CAS {
+				cas := NewTestCAS()
+
+				provProof := ProvisionalProofFile{
+					Operations: ProvProofOperations{
+						Update: []SignedUpdateDataOp{{
+							SignedData: "signed-data",
+						}},
+					},
+				}
+				ppJSON, err := json.Marshal(provProof)
+				if err != nil {
+					t.Fatal("failed to marshal provisional proof")
+				}
+				cas.insertObject("prov-proof-uri", ppJSON)
+				cas.insertObject("chunk-uri", []byte("bad chunk data"))
 
 				provIndex := ProvisionalIndexFile{
 					ProvisionalProofURI: "prov-proof-uri",
@@ -1258,6 +1409,155 @@ func TestProcessorProcess(t *testing.T) {
 			got := p.Process()
 			if !checkError(got.Error, test.want.Error) {
 				t.Errorf("expected error %v, got %v", test.want.Error, got.Error)
+			}
+
+		})
+	}
+}
+
+func TestProcessFilterDIDs(t *testing.T) {
+	testCas := func() CAS {
+		cas := NewTestCAS()
+
+		provProof := ProvisionalProofFile{
+			Operations: ProvProofOperations{
+				Update: []SignedUpdateDataOp{{
+					SignedData: "signed-data",
+				}},
+			},
+		}
+
+		ppJSON, err := json.Marshal(provProof)
+		if err != nil {
+			t.Fatal("failed to marshal provisional proof")
+		}
+		cas.insertObject("prov-proof-uri", ppJSON)
+
+		chunk := ChunkFile{
+			Deltas: []did.Delta{{}, {}, {}},
+		}
+
+		chunkJSON, err := json.Marshal(chunk)
+		if err != nil {
+			t.Fatal("failed to marshal chunk")
+		}
+		cas.insertObject("chunk-uri", chunkJSON)
+
+		provIndex := ProvisionalIndexFile{
+			ProvisionalProofURI: "prov-proof-uri",
+			Operations: ProvOPS{
+				Update: []Operation{{
+					DIDSuffix:   "update-did",
+					RevealValue: "reveal-value",
+				}},
+			},
+			Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+		}
+
+		piJSON, err := json.Marshal(provIndex)
+		if err != nil {
+			t.Fatal("failed to marshal provisional index")
+		}
+		cas.insertObject("prov-index-uri", piJSON)
+
+		coreProof := CoreProofFile{
+			Operations: CoreProofOperations{
+				Recover: []SignedRecoverDataOp{{
+					SignedData: "signed-data",
+				}},
+				Deactivate: []SignedDeactivateDataOp{{
+					SignedData: "signed-data",
+				}},
+			},
+		}
+
+		cpJSON, err := json.Marshal(coreProof)
+		if err != nil {
+			t.Fatal("failed to marshal core proof")
+		}
+		cas.insertObject("core-proof-uri", cpJSON)
+
+		coreIndex := CoreIndexFile{
+			ProvisionalIndexURI: "prov-index-uri",
+			CoreProofURI:        "core-proof-uri",
+			Operations: CoreOperations{
+				Recover: []Operation{{
+					DIDSuffix: "recover-did",
+				}},
+				Deactivate: []Operation{{
+					DIDSuffix: "deactivate-did",
+				}},
+				Create: []CreateOperation{{
+					SuffixData: did.SuffixData{
+						DeltaHash:          "abc123",
+						RecoveryCommitment: "xyz789",
+					},
+				}},
+			},
+		}
+
+		ciJSON, err := json.Marshal(coreIndex)
+		if err != nil {
+			t.Fatal("failed to marshal core index")
+		}
+		cas.insertObject("core-index-uri", ciJSON)
+
+		return cas
+	}()
+
+	tests := map[string]struct {
+		cas    CAS
+		filter []string
+		want   int
+	}{
+		"no filter": {
+			want: 4,
+			cas:  testCas,
+		},
+		"update filter": {
+			filter: []string{"update-did"},
+			want:   1,
+			cas:    testCas,
+		},
+		"recover filter": {
+			filter: []string{"recover-did"},
+			want:   1,
+			cas:    testCas,
+		},
+		"deactivate filter": {
+			filter: []string{"deactivate-did"},
+			want:   1,
+			cas:    testCas,
+		},
+		"create filter": {
+			filter: []string{"EiAcia-ZeClGSDCnIi7WRip4sm-jF9QvmsR0QDpPn64Kyw"},
+			want:   1,
+			cas:    testCas,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			p, err := Processor(
+				operations.Anchor{Anchor: "1.core-index-uri"},
+				WithCAS(test.cas),
+				WithPrefix("test"),
+				WithDIDs(test.filter),
+			)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			got := p.Process()
+			if got.Error != nil {
+				t.Errorf("expected no error, got %v", got.Error)
+			}
+			total := len(got.CreateOps) +
+				len(got.UpdateOps) +
+				len(got.DeactivateOps) +
+				len(got.RecoverOps)
+			if total != test.want {
+				t.Fatalf("expected %d operations, got %d", test.want, total)
 			}
 
 		})

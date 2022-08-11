@@ -120,7 +120,7 @@ func TestCountOperations(t *testing.T) {
 					t.Fatalf("failed to marshal core proof file: %v", err)
 				}
 				p := &OperationsProcessor{
-					CoreIndexFile: &test.IndexFile,
+					coreIndexFile: &test.IndexFile,
 					deactivateOps: map[string]operations.DeactivateInterface{},
 					recoverOps:    map[string]operations.RecoverInterface{},
 				}

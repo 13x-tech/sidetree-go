@@ -225,8 +225,8 @@ func TestCoreIndexProcess(t *testing.T) {
 						t.Fatalf("unexpected error when processing file without operations or proofs: %v", err)
 					}
 
-					if p.ProvisionalIndexFileURI != test.IndexURI {
-						t.Fatalf("expected provisional index uri to be %s but got %s", test.IndexURI, p.ProvisionalIndexFileURI)
+					if p.provisionalIndexFileURI != test.IndexURI {
+						t.Fatalf("expected provisional index uri to be %s but got %s", test.IndexURI, p.provisionalIndexFileURI)
 					}
 				})
 			}
@@ -267,8 +267,8 @@ func TestCoreIndexProcess(t *testing.T) {
 						t.Errorf("unexpected error when processing file without operations or proofs: %v", err)
 						return
 					}
-					if p.CoreProofFileURI != test.CoreProofURI {
-						t.Errorf("expected provisional index uri to be %s but got %s", test.CoreProofURI, p.CoreProofFileURI)
+					if p.coreProofFileURI != test.CoreProofURI {
+						t.Errorf("expected provisional index uri to be %s but got %s", test.CoreProofURI, p.coreProofFileURI)
 						return
 					}
 				})
