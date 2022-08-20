@@ -51,8 +51,6 @@ func (p *CoreProofFile) Process() error {
 
 func (p *CoreProofFile) setDeactivateOp(id string, revealValue string, op SignedDeactivateDataOp) {
 	p.processor.deactivateOps[id] = operations.DeactivateOperation(
-		p.processor.Anchor(),
-		p.processor.SystemAnchor(),
 		id,
 		revealValue,
 		op.SignedData,
