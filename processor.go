@@ -136,7 +136,7 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 
 	// https://identity.foundation/sidetree/spec/#value-locking
 	if d.valueLockFn != nil {
-		if !d.valueLockFn(d.coreIndexFile.WriterLockId, d.op.Operations(), d.baseFee, string(d.op.Sequence)) {
+		if !d.valueLockFn(d.coreIndexFile.WriterLockId, d.baseFee, d.op.Operations(), string(d.op.Sequence)) {
 			ops.Error = fmt.Errorf("value lock is not valid")
 			return ops
 		}

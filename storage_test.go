@@ -33,6 +33,10 @@ func (t *TestCASStorage) Start() error {
 	return nil
 }
 
+func (t *TestCASStorage) Type() CASType {
+	return CASType("test")
+}
+
 func (t *TestCASStorage) Put(data []byte) (string, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
