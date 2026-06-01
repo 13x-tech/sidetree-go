@@ -15,7 +15,7 @@ require (
 )
 
 require (
-	github.com/13x-tech/ion-sdk-go v0.0.0-20260601164436-74acf8ba7d67
+	github.com/13x-tech/ion-sdk-go v0.0.0-20260601165631-879a55c3c573
 	github.com/btcsuite/btcd/btcec/v2 v2.1.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.14 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
