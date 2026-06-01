@@ -79,7 +79,7 @@ func New(options ...SideTreeOption) *SideTree {
 	return s
 }
 
-//TODO have better defined variables that could fit multiple anchoring systems
+// TODO have better defined variables that could fit multiple anchoring systems
 type BaseFeeAlgorithm func(opCount int, anchorPoint string) int
 type PerOperationFee func(baseFee int, opCount int, anchorPoint string) bool
 type ValueLocking func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool
