@@ -116,8 +116,7 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 	}
 
 	if err := d.fetchCoreIndexFile(); err != nil {
-		//TODO Define Errors
-		ops.Error = err
+		ops.Error = err // already classified (unavailable vs malformed)
 		return ops
 	}
 
@@ -129,7 +128,7 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 	// https://identity.foundation/sidetree/spec/#per-operation-fee
 	if d.perOpFeeFn != nil {
 		if !d.perOpFeeFn(d.baseFee, d.op.Operations(), string(d.op.Sequence)) {
-			ops.Error = fmt.Errorf("per op fee is not valid")
+			ops.Error = classifyMalformed(fmt.Errorf("per op fee is not valid"))
 			return ops
 		}
 	}
@@ -137,13 +136,13 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 	// https://identity.foundation/sidetree/spec/#value-locking
 	if d.valueLockFn != nil {
 		if !d.valueLockFn(d.coreIndexFile.WriterLockId, d.baseFee, d.op.Operations(), string(d.op.Sequence)) {
-			ops.Error = fmt.Errorf("value lock is not valid")
+			ops.Error = classifyMalformed(fmt.Errorf("value lock is not valid"))
 			return ops
 		}
 	}
 
 	if err := d.coreIndexFile.Process(); err != nil {
-		ops.Error = err
+		ops.Error = classifyMalformed(err)
 		return ops
 	}
 
@@ -155,7 +154,7 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 		}
 
 		if err := d.coreProofFile.Process(); err != nil {
-			ops.Error = err
+			ops.Error = classifyMalformed(err)
 			return ops
 		}
 	}
@@ -168,7 +167,7 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 		}
 
 		if err := d.provisionalIndexFile.Process(); err != nil {
-			ops.Error = err
+			ops.Error = classifyMalformed(err)
 			return ops
 		}
 
@@ -180,7 +179,7 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 			}
 
 			if err := d.provisionalProofFile.Process(); err != nil {
-				ops.Error = err
+				ops.Error = classifyMalformed(err)
 				return ops
 			}
 		}
@@ -192,7 +191,7 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 			}
 
 			if err := d.chunkFile.Process(); err != nil {
-				ops.Error = err
+				ops.Error = classifyMalformed(err)
 				return ops
 			}
 		}
@@ -273,12 +272,12 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 
 	coreData, err := d.cas.Get(d.coreIndexFileURI)
 	if err != nil {
-		return fmt.Errorf("failed to get core index file: %w", err)
+		return fmt.Errorf("failed to get core index file: %w", classifyFetch(err))
 	}
 
 	d.coreIndexFile, err = NewCoreIndexFile(d, coreData)
 	if err != nil {
-		return fmt.Errorf("failed to create core index file: %w", err)
+		return fmt.Errorf("failed to create core index file: %w", classifyMalformed(err))
 	}
 
 	return nil
@@ -288,12 +287,12 @@ func (d *OperationsProcessor) fetchCoreProofFile() error {
 
 	coreProofData, err := d.cas.Get(d.coreProofFileURI)
 	if err != nil {
-		return fmt.Errorf("failed to get core proof file: %w", err)
+		return fmt.Errorf("failed to get core proof file: %w", classifyFetch(err))
 	}
 
 	d.coreProofFile, err = NewCoreProofFile(d, coreProofData)
 	if err != nil {
-		return fmt.Errorf("failed to create core proof file: %w", err)
+		return fmt.Errorf("failed to create core proof file: %w", classifyMalformed(err))
 	}
 
 	return nil
@@ -303,12 +302,12 @@ func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 
 	provisionalData, err := d.cas.Get(d.provisionalIndexFileURI)
 	if err != nil {
-		return fmt.Errorf("failed to get provisional index file: %w", err)
+		return fmt.Errorf("failed to get provisional index file: %w", classifyFetch(err))
 	}
 
 	d.provisionalIndexFile, err = NewProvisionalIndexFile(d, provisionalData)
 	if err != nil {
-		return fmt.Errorf("failed to create provisional index file: %w", err)
+		return fmt.Errorf("failed to create provisional index file: %w", classifyMalformed(err))
 	}
 
 	return nil
@@ -318,12 +317,12 @@ func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 
 	provisionalProofData, err := d.cas.Get(d.provisionalProofFileURI)
 	if err != nil {
-		return fmt.Errorf("failed to get provisional proof file: %w", err)
+		return fmt.Errorf("failed to get provisional proof file: %w", classifyFetch(err))
 	}
 
 	d.provisionalProofFile, err = NewProvisionalProofFile(d, provisionalProofData)
 	if err != nil {
-		return fmt.Errorf("failed to create provisional proof file: %w", err)
+		return fmt.Errorf("failed to create provisional proof file: %w", classifyMalformed(err))
 	}
 
 	return nil
@@ -333,7 +332,7 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 
 	chunkData, err := d.cas.Get(d.chunkFileURI)
 	if err != nil {
-		return fmt.Errorf("failed to get chunk file: %w", err)
+		return fmt.Errorf("failed to get chunk file: %w", classifyFetch(err))
 	}
 
 	d.chunkFile, err = NewChunkFile(chunkData,
@@ -341,7 +340,7 @@ func (d *OperationsProcessor) fetchChunkFile() error {
 		WithOperations(d.createOps, d.recoverOps, d.updateOps),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create chunk file: %w", err)
+		return fmt.Errorf("failed to create chunk file: %w", classifyMalformed(err))
 	}
 
 	return nil
