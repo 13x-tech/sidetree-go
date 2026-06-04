@@ -43,8 +43,13 @@ const (
 	// proof file (also the spec's MAX_OPERATION_HASH_LENGTH).
 	MaxCASURILength = 100
 
-	// MaxEncodedRevealValueLength caps an operation's encoded reveal value
-	// (from Operation.ts; not present in protocol-parameters.json).
+	// MaxEncodedRevealValueLength is the spec's nominal cap on an operation's
+	// encoded reveal value (from Operation.ts; not in protocol-parameters.json).
+	// The reference does NOT enforce it as a length check — it validates the
+	// reveal value as a supported-algorithm (SHA-256) multihash, which ion-sdk-go
+	// enforces at apply time (did.CheckReveal). Kept here for table completeness;
+	// not used as a structural parse-time cap (that would reject reveals the
+	// reference accepts).
 	MaxEncodedRevealValueLength = 50
 
 	// MaxWriterLockIDInBytes caps the writerLockId string in the core index file.

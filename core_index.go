@@ -37,6 +37,18 @@ func (c *CoreIndexFile) Process() error {
 	// Max Core Index File Size is enforced at fetch time
 	// (fetchCoreIndexFile passes MaxCoreIndexFileSizeInBytes to CAS.Get).
 
+	// Per-field caps (#32): writerLockId and the embedded CAS URIs carried by this
+	// file. (Reveal values are not length-checked — see validation.go.)
+	if err := checkWriterLockID(c.WriterLockId); err != nil {
+		return err
+	}
+	if err := checkCASURI("core proof uri", c.CoreProofURI); err != nil {
+		return err
+	}
+	if err := checkCASURI("provisional index uri", c.ProvisionalIndexURI); err != nil {
+		return err
+	}
+
 	c.processor.provisionalIndexFileURI = c.ProvisionalIndexURI
 
 	if (len(c.Operations.Deactivate) > 0 || len(c.Operations.Recover) > 0) && c.CoreProofURI == "" {

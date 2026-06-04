@@ -47,6 +47,17 @@ var (
 	// The content is immutable, so this is a permanent rejection.
 	ErrFileTooLarge = fmt.Errorf("sidetree file exceeds its maximum size")
 
+	// Per-field caps (Sidetree protocol rule, enforced at file-parse time). A
+	// field exceeding its cap makes the whole batch permanently invalid. Only the
+	// caps the reference implementation actually enforces at parse time are here:
+	// maxCasUriLength on EMBEDDED CAS URIs, maxWriterLockIdInBytes, and
+	// maxDeltaSizeInBytes. (The reference does NOT length-check the anchor's own
+	// core-index CID, nor the reveal value — it validates the reveal as a
+	// supported-algorithm multihash, which ion-sdk-go enforces at apply time.)
+	ErrCASURITooLong       = fmt.Errorf("CAS URI exceeds maxCasUriLength")
+	ErrWriterLockIDTooLong = fmt.Errorf("writerLockId exceeds maxWriterLockIdInBytes")
+	ErrDeltaTooLarge       = fmt.Errorf("operation delta exceeds maxDeltaSizeInBytes")
+
 	// ErrContentUnavailable marks a Sidetree-file fetch that failed because the
 	// CAS could not return the content (IPFS timeout, not-found, peer
 	// unreachable). The content may be published or become reachable later, so

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/13x-tech/ion-sdk-go/pkg/did"
@@ -1800,5 +1801,251 @@ func TestFetchPassesPerFileSizeCaps(t *testing.T) {
 		if got != cap {
 			t.Errorf("%s fetched with cap %d, want %d", uri, got, cap)
 		}
+	}
+}
+
+// TestProcessorPerFieldCaps verifies the per-field structural caps enforced when
+// parsing the core index file (#32): writerLockId and the embedded CAS URIs.
+// Each violation is a permanent rejection (ErrMalformed); a value exactly at the
+// cap is accepted.
+func TestProcessorPerFieldCaps(t *testing.T) {
+	tooLongURI := strings.Repeat("u", MaxCASURILength+1)         // 101
+	tooLongLock := strings.Repeat("l", MaxWriterLockIDInBytes+1) // 201
+	atCapLock := strings.Repeat("l", MaxWriterLockIDInBytes)     // 200 (must pass)
+
+	tests := map[string]struct {
+		anchor    operations.AnchorString
+		coreIndex CoreIndexFile
+		wantErr   error // nil means the batch must process cleanly
+	}{
+		"writer lock id too long": {
+			anchor:    "1.cid",
+			coreIndex: CoreIndexFile{WriterLockId: tooLongLock},
+			wantErr:   ErrWriterLockIDTooLong,
+		},
+		"writer lock id at cap accepts": {
+			anchor:    "1.cid",
+			coreIndex: CoreIndexFile{WriterLockId: atCapLock},
+			wantErr:   nil,
+		},
+		"core proof uri too long": {
+			anchor:    "1.cid",
+			coreIndex: CoreIndexFile{CoreProofURI: tooLongURI},
+			wantErr:   ErrCASURITooLong,
+		},
+		"provisional index uri too long": {
+			anchor:    "1.cid",
+			coreIndex: CoreIndexFile{ProvisionalIndexURI: tooLongURI},
+			wantErr:   ErrCASURITooLong,
+		},
+		"all fields within caps accepts": {
+			anchor:    "1.cid",
+			coreIndex: CoreIndexFile{WriterLockId: "lock"},
+			wantErr:   nil,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			cas := NewTestCAS()
+			b, err := json.Marshal(test.coreIndex)
+			if err != nil {
+				t.Fatalf("failed to marshal core index: %v", err)
+			}
+			cas.insertObject(test.anchor.CID(), b)
+
+			p, err := Processor(operations.Anchor{Anchor: test.anchor}, WithCAS(cas), WithPrefix("test"))
+			if err != nil {
+				t.Fatalf("expected no error creating processor, got %v", err)
+			}
+
+			got := p.Process()
+			if !checkError(got.Error, test.wantErr) {
+				t.Errorf("expected %v, got %v", test.wantErr, got.Error)
+			}
+			if test.wantErr != nil && !errors.Is(got.Error, ErrMalformed) {
+				t.Errorf("expected rejection to be ErrMalformed (permanent), got %v", got.Error)
+			}
+		})
+	}
+}
+
+// TestProcessorAcceptsRealisticAnchor guards against over-rejection (#32): a
+// realistic canonical batch — a 59-char CIDv1 anchor CID, embedded CAS URIs,
+// reveal values longer than the (removed) 50-byte cap, and a real ~900-byte
+// delta — must process cleanly. This is the regression test for the two
+// over-rejections (reveal length, anchor-CID length) the reference does not have.
+func TestProcessorAcceptsRealisticAnchor(t *testing.T) {
+	cas := NewTestCAS()
+	insert := func(uri string, v interface{}) {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("failed to marshal %s: %v", uri, err)
+		}
+		cas.insertObject(uri, b)
+	}
+
+	// A reveal value longer than the old 50-byte cap must not be rejected.
+	longReveal := strings.Repeat("a", 70)
+	// A real delta well under 1000 canonical bytes (one add-public-keys patch).
+	realDelta := did.Delta{
+		UpdateCommitment: "EiB_realistic_update_commitment_value_000000",
+		Patches: []map[string]interface{}{{
+			"action": "add-public-keys",
+			"publicKeys": []map[string]interface{}{{
+				"id":           "key-1",
+				"type":         "EcdsaSecp256k1VerificationKey2019",
+				"publicKeyJwk": map[string]string{"kty": "EC", "crv": "secp256k1", "x": strings.Repeat("x", 43), "y": strings.Repeat("y", 43)},
+				"purposes":     []string{"authentication"},
+			}},
+		}},
+	}
+
+	insert("chunk-uri", ChunkFile{Deltas: []did.Delta{realDelta, realDelta, realDelta}})
+	insert("prov-proof-uri", ProvisionalProofFile{
+		Operations: ProvProofOperations{Update: []SignedUpdateDataOp{{SignedData: "signed-data"}}},
+	})
+	insert("prov-index-uri", ProvisionalIndexFile{
+		ProvisionalProofURI: "prov-proof-uri",
+		Operations:          ProvOPS{Update: []Operation{{DIDSuffix: "update-did", RevealValue: longReveal}}},
+		Chunks:              []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+	})
+	insert("core-proof-uri", CoreProofFile{
+		Operations: CoreProofOperations{
+			Recover:    []SignedRecoverDataOp{{SignedData: "signed-data"}},
+			Deactivate: []SignedDeactivateDataOp{{SignedData: "signed-data"}},
+		},
+	})
+	insert("core-index-uri", CoreIndexFile{
+		ProvisionalIndexURI: "prov-index-uri",
+		CoreProofURI:        "core-proof-uri",
+		Operations: CoreOperations{
+			Recover:    []Operation{{DIDSuffix: "recover-did", RevealValue: longReveal}},
+			Deactivate: []Operation{{DIDSuffix: "deactivate-did", RevealValue: longReveal}},
+			Create:     []CreateOperation{{SuffixData: did.SuffixData{DeltaHash: "abc123", RecoveryCommitment: "xyz789"}}},
+		},
+	})
+
+	// 4 operations (create + recover + deactivate + update); 3 deltas
+	// (create + recover + update).
+	p, err := Processor(operations.Anchor{Anchor: "4.core-index-uri"}, WithCAS(cas), WithPrefix("test"))
+	if err != nil {
+		t.Fatalf("expected no error creating processor, got %v", err)
+	}
+	if got := p.Process(); got.Error != nil {
+		t.Fatalf("realistic anchor was wrongly rejected: %v", got.Error)
+	}
+}
+
+// TestProcessorProvisionalFieldCaps verifies the per-field caps enforced when
+// parsing the provisional index file (#32): its embedded CAS URIs.
+func TestProcessorProvisionalFieldCaps(t *testing.T) {
+	tooLongURI := strings.Repeat("u", MaxCASURILength+1)
+
+	tests := map[string]struct {
+		provIndex ProvisionalIndexFile
+		wantErr   error
+	}{
+		"provisional proof uri too long": {
+			provIndex: ProvisionalIndexFile{ProvisionalProofURI: tooLongURI},
+			wantErr:   ErrCASURITooLong,
+		},
+		"chunk file uri too long": {
+			provIndex: ProvisionalIndexFile{Chunks: []ProvChunk{{ChunkFileURI: tooLongURI}}},
+			wantErr:   ErrCASURITooLong,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			cas := NewTestCAS()
+
+			pi, err := json.Marshal(test.provIndex)
+			if err != nil {
+				t.Fatalf("failed to marshal provisional index: %v", err)
+			}
+			cas.insertObject("prov-index-uri", pi)
+
+			ci, err := json.Marshal(CoreIndexFile{ProvisionalIndexURI: "prov-index-uri"})
+			if err != nil {
+				t.Fatalf("failed to marshal core index: %v", err)
+			}
+			cas.insertObject("cid", ci)
+
+			p, err := Processor(operations.Anchor{Anchor: "1.cid"}, WithCAS(cas), WithPrefix("test"))
+			if err != nil {
+				t.Fatalf("expected no error creating processor, got %v", err)
+			}
+
+			got := p.Process()
+			if !checkError(got.Error, test.wantErr) {
+				t.Errorf("expected %v, got %v", test.wantErr, got.Error)
+			}
+			if !errors.Is(got.Error, ErrMalformed) {
+				t.Errorf("expected rejection to be ErrMalformed (permanent), got %v", got.Error)
+			}
+		})
+	}
+}
+
+// TestProcessorDeltaSizeCap verifies that an operation delta whose canonicalized
+// size exceeds MaxDeltaSizeInBytes is rejected when the chunk file is processed (#32).
+func TestProcessorDeltaSizeCap(t *testing.T) {
+	oversizedDelta := did.Delta{UpdateCommitment: strings.Repeat("x", MaxDeltaSizeInBytes+200)}
+	chunk, err := json.Marshal(ChunkFile{Deltas: []did.Delta{oversizedDelta}})
+	if err != nil {
+		t.Fatalf("failed to marshal chunk: %v", err)
+	}
+	runDeltaSizeTest(t, chunk, ErrDeltaTooLarge)
+}
+
+// TestProcessorDeltaSizeCapCountsUnknownFields verifies the cap is measured on
+// the raw on-wire delta bytes, not a re-marshaled did.Delta. A delta that is
+// small once parsed (unknown fields dropped) but large on the wire (the bytes
+// the reference canonicalizes and sizes) must still be rejected — otherwise a
+// writer could hide bytes in fields our struct ignores to evade the cap.
+func TestProcessorDeltaSizeCapCountsUnknownFields(t *testing.T) {
+	// Hand-build the chunk JSON so the delta carries an unknown top-level field
+	// that json.Unmarshal into did.Delta would drop.
+	padding := strings.Repeat("z", MaxDeltaSizeInBytes+200)
+	rawChunk := []byte(`{"deltas":[{"patches":[],"updateCommitment":"c","unknownField":"` + padding + `"}]}`)
+	runDeltaSizeTest(t, rawChunk, ErrDeltaTooLarge)
+}
+
+// runDeltaSizeTest stages a minimal create-only batch whose single delta is the
+// provided chunk file, and asserts Process() rejects it with wantErr (permanent).
+func runDeltaSizeTest(t *testing.T, chunkJSON []byte, wantErr error) {
+	t.Helper()
+	cas := NewTestCAS()
+	cas.insertObject("chunk-uri", chunkJSON)
+
+	pi, err := json.Marshal(ProvisionalIndexFile{Chunks: []ProvChunk{{ChunkFileURI: "chunk-uri"}}})
+	if err != nil {
+		t.Fatalf("failed to marshal provisional index: %v", err)
+	}
+	cas.insertObject("prov-index-uri", pi)
+
+	ci, err := json.Marshal(CoreIndexFile{
+		ProvisionalIndexURI: "prov-index-uri",
+		Operations: CoreOperations{
+			Create: []CreateOperation{{SuffixData: did.SuffixData{DeltaHash: "d", RecoveryCommitment: "r"}}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal core index: %v", err)
+	}
+	cas.insertObject("cid", ci)
+
+	p, err := Processor(operations.Anchor{Anchor: "1.cid"}, WithCAS(cas), WithPrefix("test"))
+	if err != nil {
+		t.Fatalf("expected no error creating processor, got %v", err)
+	}
+
+	got := p.Process()
+	if !checkError(got.Error, wantErr) {
+		t.Errorf("expected %v, got %v", wantErr, got.Error)
+	}
+	if !errors.Is(got.Error, ErrMalformed) {
+		t.Errorf("expected rejection to be ErrMalformed (permanent), got %v", got.Error)
 	}
 }
