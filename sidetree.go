@@ -92,19 +92,48 @@ type SideTree struct {
 	valueLockFn ValueLocking
 }
 
+// feeFunctions returns the configured fee / value-lock callbacks as a slice
+// suitable for WithFeeFunctions, omitting any that are unset. A nil callback is
+// never forwarded so the nil guards in OperationsProcessor.Process() stay correct.
+func (s *SideTree) feeFunctions() []interface{} {
+	var fns []interface{}
+	if s.baseFeeFn != nil {
+		fns = append(fns, s.baseFeeFn)
+	}
+	if s.perOpFeeFn != nil {
+		fns = append(fns, s.perOpFeeFn)
+	}
+	if s.valueLockFn != nil {
+		fns = append(fns, s.valueLockFn)
+	}
+	return fns
+}
+
 func (s *SideTree) ProcessOperations(ops []operations.Anchor, ids []string) (map[operations.Anchor]ProcessedOperations, error) {
 
 	//TODO Validate ids
 
+	// Forward any configured fee / value-lock callbacks to every per-anchor
+	// Processor. Without this the base-fee, per-operation-fee, and value-lock
+	// checks in Process() can never fire (the Processor's callbacks would stay
+	// nil), so a SideTree built WithFeeFunctions would silently skip them.
+	// Only non-nil callbacks are forwarded, keeping the nil guards in Process()
+	// correct for a SideTree configured with a subset of the callbacks.
+	feeFns := s.feeFunctions()
+
 	opsMap := map[operations.Anchor]ProcessedOperations{}
 	for _, op := range ops {
 
-		processor, err := Processor(
-			op,
+		opts := []SideTreeOption{
 			WithPrefix(s.method),
 			WithCAS(s.cas),
 			WithDIDs(ids),
-		)
+		}
+		if len(feeFns) > 0 {
+			opts = append(opts, WithFeeFunctions(feeFns...))
+		}
+
+		processor, err := Processor(op, opts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create operations processor: %w", err)
 		}
