@@ -146,6 +146,12 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 	}
 
 	// https://identity.foundation/sidetree/spec/#value-locking
+	// The valueLockFn is the integration seam the Bitcoin layer (ion-node)
+	// implements: it resolves the writerLockId to a ValueTimeLock, looks up the
+	// block's normalized fee, identifies the transaction writer, and decides via
+	// the ported policy VerifyLockAmount (see valuelock.go). It returns true iff
+	// the anchor is permitted.
+	//
 	// NOTE: the opCount passed here is the writer-DECLARED anchor-string count
 	// (the "paid" count). It is an upper bound and may exceed the operations
 	// actually anchored (ION permits paying/locking for more than are used), so a
