@@ -45,6 +45,17 @@ func NewChunkFile(data []byte, opts ...ChunkOption) (*ChunkFile, error) {
 		return nil, fmt.Errorf("unable to unmarshal: %w", err)
 	}
 
+	// Capture the raw on-wire bytes of each delta so the per-delta size cap (#32)
+	// is measured on what was actually anchored, not a re-marshaled did.Delta
+	// (which would silently drop unknown fields and undercount the size).
+	var raw struct {
+		Deltas []json.RawMessage `json:"deltas"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal raw deltas: %w", err)
+	}
+	c.rawDeltas = raw.Deltas
+
 	for _, opt := range opts {
 		opt(&c)
 	}
@@ -54,6 +65,10 @@ func NewChunkFile(data []byte, opts ...ChunkOption) (*ChunkFile, error) {
 
 type ChunkFile struct {
 	Deltas []did.Delta `json:"deltas"`
+
+	// rawDeltas holds the unparsed on-wire bytes of each entry in Deltas (same
+	// order/length), used only for the canonicalized size check.
+	rawDeltas []json.RawMessage
 
 	createMappingArray  []string
 	recoverMappingArray []string
@@ -91,7 +106,16 @@ func (c *ChunkFile) Process() error {
 		return ErrInvalidDeltaCount
 	}
 
+	if len(c.rawDeltas) != len(c.Deltas) {
+		return ErrInvalidDeltaCount
+	}
+
 	for i, delta := range c.Deltas {
+		// Per-field cap (#32): each operation's canonicalized delta must not
+		// exceed MaxDeltaSizeInBytes. Measured on the raw on-wire bytes.
+		if err := checkDeltaSize(c.rawDeltas[i]); err != nil {
+			return err
+		}
 		id := mappingArray[i]
 		c.setDelta(id, delta)
 	}

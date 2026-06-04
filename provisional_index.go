@@ -31,7 +31,19 @@ type ProvisionalIndexFile struct {
 func (p *ProvisionalIndexFile) Process() error {
 	// p.processor.log.Infof("Processing provisional index file %s", p.processor.ProvisionalIndexFileURI)
 
-	// TODO Check Max Provisional Index File Size
+	// Max Provisional Index File Size is enforced at fetch time
+	// (fetchProvisionalIndexFile passes MaxProvisionalIndexFileSizeInBytes to CAS.Get).
+
+	// Per-field caps (#32): the embedded CAS URIs this file carries. (Reveal
+	// values are not length-checked — see validation.go.)
+	if err := checkCASURI("provisional proof uri", p.ProvisionalProofURI); err != nil {
+		return err
+	}
+	for _, chunk := range p.Chunks {
+		if err := checkCASURI("chunk file uri", chunk.ChunkFileURI); err != nil {
+			return err
+		}
+	}
 
 	p.processor.provisionalProofFileURI = p.ProvisionalProofURI
 
