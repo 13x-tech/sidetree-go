@@ -18,7 +18,7 @@ func (malformedCAS) Close() error               { return nil }
 func (malformedCAS) Start() error               { return nil }
 func (malformedCAS) Type() CASType              { return CASType("malformed") }
 func (malformedCAS) Put([]byte) (string, error) { return "", nil }
-func (malformedCAS) Get(id string) ([]byte, error) {
+func (malformedCAS) Get(id string, maxSizeInBytes int) ([]byte, error) {
 	return nil, fmt.Errorf("corrupt object %s: %w", id, ErrMalformed)
 }
 

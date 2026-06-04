@@ -66,7 +66,8 @@ type ChunkFile struct {
 
 func (c *ChunkFile) Process() error {
 	// c.processor.log.Infof("Processing chunk file %s", c.processor.ChunkFileURI)
-	// TODO Check Max Chunk File Size
+	// Max Chunk File Size is enforced at fetch time
+	// (fetchChunkFile passes MaxChunkFileSizeInBytes to CAS.Get).
 
 	// In order to process Chunk File Delta Entries in relation to the DIDs they
 	// are bound to, they must be mapped back to the Create, Recovery,

@@ -34,7 +34,8 @@ func (c *CoreIndexFile) Process() error {
 	// Core Index File Processing Procedure
 	// https://identity.foundation/sidetree/spec/#core-index-file-processing
 
-	//TODO Check Max Core Index File Size
+	// Max Core Index File Size is enforced at fetch time
+	// (fetchCoreIndexFile passes MaxCoreIndexFileSizeInBytes to CAS.Get).
 
 	c.processor.provisionalIndexFileURI = c.ProvisionalIndexURI
 

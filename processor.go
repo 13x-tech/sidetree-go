@@ -346,11 +346,27 @@ func (d *OperationsProcessor) DeactivateOps() map[string]operations.DeactivateIn
 	return ops
 }
 
+// checkFileSize defensively enforces the protocol per-file cap on the
+// (decompressed) bytes a CAS returned, in case a CAS does not honor the
+// maxSizeInBytes contract on Get. The legal decompressed size is the per-file
+// cap times MaxMemoryDecompressionFactor; anything larger is a permanently
+// invalid file (ErrMalformed). name identifies the file for the error message.
+func checkFileSize(name string, data []byte, maxSizeInBytes int) error {
+	limit := maxSizeInBytes * MaxMemoryDecompressionFactor
+	if len(data) > limit {
+		return classifyMalformed(fmt.Errorf("%w: %s is %d bytes (limit %d)", ErrFileTooLarge, name, len(data), limit))
+	}
+	return nil
+}
+
 func (d *OperationsProcessor) fetchCoreIndexFile() error {
 
-	coreData, err := d.cas.Get(d.coreIndexFileURI)
+	coreData, err := d.cas.Get(d.coreIndexFileURI, MaxCoreIndexFileSizeInBytes)
 	if err != nil {
 		return fmt.Errorf("failed to get core index file: %w", classifyFetch(err))
+	}
+	if err := checkFileSize("core index file", coreData, MaxCoreIndexFileSizeInBytes); err != nil {
+		return err
 	}
 
 	d.coreIndexFile, err = NewCoreIndexFile(d, coreData)
@@ -363,9 +379,12 @@ func (d *OperationsProcessor) fetchCoreIndexFile() error {
 
 func (d *OperationsProcessor) fetchCoreProofFile() error {
 
-	coreProofData, err := d.cas.Get(d.coreProofFileURI)
+	coreProofData, err := d.cas.Get(d.coreProofFileURI, MaxProofFileSizeInBytes)
 	if err != nil {
 		return fmt.Errorf("failed to get core proof file: %w", classifyFetch(err))
+	}
+	if err := checkFileSize("core proof file", coreProofData, MaxProofFileSizeInBytes); err != nil {
+		return err
 	}
 
 	d.coreProofFile, err = NewCoreProofFile(d, coreProofData)
@@ -378,9 +397,12 @@ func (d *OperationsProcessor) fetchCoreProofFile() error {
 
 func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 
-	provisionalData, err := d.cas.Get(d.provisionalIndexFileURI)
+	provisionalData, err := d.cas.Get(d.provisionalIndexFileURI, MaxProvisionalIndexFileSizeInBytes)
 	if err != nil {
 		return fmt.Errorf("failed to get provisional index file: %w", classifyFetch(err))
+	}
+	if err := checkFileSize("provisional index file", provisionalData, MaxProvisionalIndexFileSizeInBytes); err != nil {
+		return err
 	}
 
 	d.provisionalIndexFile, err = NewProvisionalIndexFile(d, provisionalData)
@@ -393,9 +415,12 @@ func (d *OperationsProcessor) fetchProvisionalIndexFile() error {
 
 func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 
-	provisionalProofData, err := d.cas.Get(d.provisionalProofFileURI)
+	provisionalProofData, err := d.cas.Get(d.provisionalProofFileURI, MaxProofFileSizeInBytes)
 	if err != nil {
 		return fmt.Errorf("failed to get provisional proof file: %w", classifyFetch(err))
+	}
+	if err := checkFileSize("provisional proof file", provisionalProofData, MaxProofFileSizeInBytes); err != nil {
+		return err
 	}
 
 	d.provisionalProofFile, err = NewProvisionalProofFile(d, provisionalProofData)
@@ -408,9 +433,12 @@ func (d *OperationsProcessor) fetchProvisionalProofFile() error {
 
 func (d *OperationsProcessor) fetchChunkFile() error {
 
-	chunkData, err := d.cas.Get(d.chunkFileURI)
+	chunkData, err := d.cas.Get(d.chunkFileURI, MaxChunkFileSizeInBytes)
 	if err != nil {
 		return fmt.Errorf("failed to get chunk file: %w", classifyFetch(err))
+	}
+	if err := checkFileSize("chunk file", chunkData, MaxChunkFileSizeInBytes); err != nil {
+		return err
 	}
 
 	d.chunkFile, err = NewChunkFile(chunkData,

@@ -19,7 +19,8 @@ func (c *Closer) Close() error {
 
 func NewTestCAS() *TestCASStorage {
 	return &TestCASStorage{
-		cas: make(map[string][]byte),
+		cas:      make(map[string][]byte),
+		maxSizes: make(map[string]int),
 	}
 }
 
@@ -27,6 +28,9 @@ type TestCASStorage struct {
 	Closer
 	mu  sync.Mutex
 	cas map[string][]byte
+	// maxSizes records the maxSizeInBytes the last Get for each id was called
+	// with, so tests can assert the caller passed the correct per-file cap.
+	maxSizes map[string]int
 }
 
 func (t *TestCASStorage) Start() error {
@@ -45,9 +49,13 @@ func (t *TestCASStorage) Put(data []byte) (string, error) {
 	return id, nil
 }
 
-func (t *TestCASStorage) Get(id string) ([]byte, error) {
+// Get records the requested cap (for assertions) but intentionally does NOT
+// enforce it, so tests can stage oversized content and exercise the caller's
+// defensive checkFileSize guard. A real CAS bounds the download itself.
+func (t *TestCASStorage) Get(id string, maxSizeInBytes int) ([]byte, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.maxSizes[id] = maxSizeInBytes
 	data, ok := t.cas[id]
 	if !ok {
 		return nil, fmt.Errorf("no data found for id %s", id)
@@ -100,7 +108,7 @@ func TestCAS(t *testing.T) {
 		t.Errorf("Error inserting test object: %v", err)
 	}
 
-	fetchedObject, err := cas.Get("QmXXXXX")
+	fetchedObject, err := cas.Get("QmXXXXX", MaxCoreIndexFileSizeInBytes)
 	if err != nil {
 		t.Errorf("Error getting gzip: %v", err)
 	}

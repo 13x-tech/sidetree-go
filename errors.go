@@ -42,6 +42,11 @@ var (
 	// past the operation-limit gate while packing more operations into the files.
 	ErrOperationCountMismatch = fmt.Errorf("anchored operation count exceeds the anchor-string declared count")
 
+	// ErrFileTooLarge: a Sidetree file's (decompressed) size exceeds the maximum
+	// the protocol allows for its type (per-file cap × MaxMemoryDecompressionFactor).
+	// The content is immutable, so this is a permanent rejection.
+	ErrFileTooLarge = fmt.Errorf("sidetree file exceeds its maximum size")
+
 	// ErrContentUnavailable marks a Sidetree-file fetch that failed because the
 	// CAS could not return the content (IPFS timeout, not-found, peer
 	// unreachable). The content may be published or become reachable later, so
