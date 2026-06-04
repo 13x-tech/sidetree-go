@@ -120,6 +120,18 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 		return ops
 	}
 
+	// Per-anchor operation-count enforcement (Sidetree protocol rule). This runs
+	// UNCONDITIONALLY — it does not depend on any configured fee/value-lock
+	// callback — and rejects the entire batch the way a spec-compliant ION node
+	// does. Rejection is permanent and never retried, so it routes through
+	// classifyMalformed. Checked here, right after the core index file is
+	// available (so writerLockId is known) and before any file downloads.
+	declaredOps := d.op.Operations()
+	if err := d.checkOperationLimit(declaredOps); err != nil {
+		ops.Error = classifyMalformed(err)
+		return ops
+	}
+
 	// https://identity.foundation/sidetree/spec/#base-fee-variable
 	if d.baseFeeFn != nil {
 		d.baseFee = d.baseFeeFn(d.op.Operations(), string(d.op.Sequence))
@@ -134,6 +146,11 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 	}
 
 	// https://identity.foundation/sidetree/spec/#value-locking
+	// NOTE: the opCount passed here is the writer-DECLARED anchor-string count
+	// (the "paid" count). It is an upper bound and may exceed the operations
+	// actually anchored (ION permits paying/locking for more than are used), so a
+	// lock verifier must size the required lock against this declared count — not
+	// against the post-parse actual count.
 	if d.valueLockFn != nil {
 		if !d.valueLockFn(d.coreIndexFile.WriterLockId, d.baseFee, d.op.Operations(), string(d.op.Sequence)) {
 			ops.Error = classifyMalformed(fmt.Errorf("value lock is not valid"))
@@ -197,6 +214,15 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 		}
 	}
 
+	// A writer must not understate the anchor-string operation count to slip
+	// past checkOperationLimit above while packing more operations into the
+	// anchored files. Now that every file is parsed, reject if the anchored
+	// operation count exceeds what the anchor string declared.
+	if anchored := d.anchoredOperationCount(); anchored > declaredOps {
+		ops.Error = classifyMalformed(fmt.Errorf("%w: declared %d, anchored %d", ErrOperationCountMismatch, declaredOps, anchored))
+		return ops
+	}
+
 	return ProcessedOperations{
 		Error:          nil,
 		AnchorString:   d.Anchor(),
@@ -206,6 +232,58 @@ func (d *OperationsProcessor) Process() ProcessedOperations {
 		UpdateOps:      d.UpdateOps(),
 		DeactivateOps:  d.DeactivateOps(),
 	}
+}
+
+// checkOperationLimit enforces the Sidetree per-anchor operation-count rules
+// against opCount (the anchor-string declared count), unconditionally:
+//
+//   - opCount > MaxOperationsPerBatch: hard ceiling; no value lock can exceed it.
+//   - opCount > MaxNumberOfOperationsForNoValueTimeLock with an empty
+//     writerLockId: too many operations and no value-time-lock.
+//   - opCount > MaxNumberOfOperationsForNoValueTimeLock with a writerLockId but
+//     no value-lock verifier installed: the lock cannot be verified yet (no
+//     on-chain LockResolver / normalized fee; see #33/#55), so default-reject.
+//     When a verifier IS installed, this defers to it (the valueLockFn block in
+//     Process decides), so the seam stays meaningful.
+//
+// The returned error is unwrapped; the caller wraps it with classifyMalformed.
+func (d *OperationsProcessor) checkOperationLimit(opCount int) error {
+	// A valid anchor declares at least one operation. AnchorString.Operations()
+	// collapses a non-numeric count to 0 (and lets a negative count through), so
+	// guard the count's validity here — otherwise a malformed "abc.cid"/"0.cid"
+	// would be waved past the quota gate as "under the free limit".
+	if opCount < 1 {
+		return fmt.Errorf("%w: %d", ErrInvalidOperationCount, opCount)
+	}
+	if opCount > MaxOperationsPerBatch {
+		return fmt.Errorf("%w: %d > %d", ErrTooManyOperations, opCount, MaxOperationsPerBatch)
+	}
+	if opCount <= MaxNumberOfOperationsForNoValueTimeLock {
+		return nil
+	}
+	if d.coreIndexFile.WriterLockId == "" {
+		return fmt.Errorf("%w: %d > %d", ErrOperationLimitExceeded, opCount, MaxNumberOfOperationsForNoValueTimeLock)
+	}
+	if d.valueLockFn == nil {
+		return fmt.Errorf("%w: %d operations, writerLockId %q", ErrUnverifiableValueLock, opCount, d.coreIndexFile.WriterLockId)
+	}
+	return nil
+}
+
+// anchoredOperationCount returns the number of operations actually present in
+// the anchored files: core index Create/Recover/Deactivate plus provisional
+// Update. (Provisional index may be absent.)
+func (d *OperationsProcessor) anchoredOperationCount() int {
+	n := 0
+	if d.coreIndexFile != nil {
+		n += len(d.coreIndexFile.Operations.Create)
+		n += len(d.coreIndexFile.Operations.Recover)
+		n += len(d.coreIndexFile.Operations.Deactivate)
+	}
+	if d.provisionalIndexFile != nil {
+		n += len(d.provisionalIndexFile.Operations.Update)
+	}
+	return n
 }
 
 func (d *OperationsProcessor) CreateOps() map[string]operations.CreateInterface {

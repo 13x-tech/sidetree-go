@@ -10,6 +10,38 @@ var (
 	ErrDuplicateOperation = fmt.Errorf("duplicate operation")
 	ErrNoCoreProof        = fmt.Errorf("core proof uri is empty")
 
+	// Per-anchor operation-count limits (Sidetree protocol rule). A
+	// spec-compliant ION node rejects the ENTIRE anchored batch — permanently,
+	// never retried — when an anchor's operation count violates these, so they
+	// are classified as ErrMalformed at the point of enforcement. See
+	// docs/plans/2026-06-04-001-feat-ion-value-locking-protocol-rules-plan.md.
+
+	// ErrInvalidOperationCount: the anchor string declares a non-positive or
+	// unparseable operation count. AnchorString.Operations() returns 0 for both a
+	// literal "0" and a non-numeric count, and a negative value parses through, so
+	// any count < 1 is treated as a malformed anchor (ION rejects it at parse time).
+	ErrInvalidOperationCount = fmt.Errorf("anchor declares a non-positive or unparseable operation count")
+
+	// ErrTooManyOperations: the anchor declares more operations than
+	// MaxOperationsPerBatch (the absolute ceiling; no value lock can exceed it).
+	ErrTooManyOperations = fmt.Errorf("anchor operation count exceeds maxOperationsPerBatch")
+
+	// ErrOperationLimitExceeded: the anchor declares more than
+	// MaxNumberOfOperationsForNoValueTimeLock operations with no writer value lock.
+	ErrOperationLimitExceeded = fmt.Errorf("anchor operation count exceeds maxNumberOfOperationsForNoValueTimeLock without a value-time-lock")
+
+	// ErrUnverifiableValueLock: the anchor exceeds the free quota and presents a
+	// writerLockId, but no value-lock verifier is configured to authorize it, so
+	// the lock cannot be verified (no on-chain LockResolver / normalized fee yet).
+	// Default-reject. ION mainnet runs with value-locking disabled, so no
+	// canonical anchor reaches this branch today.
+	ErrUnverifiableValueLock = fmt.Errorf("anchor exceeds the free operation quota with an unverifiable value lock")
+
+	// ErrOperationCountMismatch: the anchored files contain more operations than
+	// the anchor string declares — a writer must not understate the count to slip
+	// past the operation-limit gate while packing more operations into the files.
+	ErrOperationCountMismatch = fmt.Errorf("anchored operation count exceeds the anchor-string declared count")
+
 	// ErrContentUnavailable marks a Sidetree-file fetch that failed because the
 	// CAS could not return the content (IPFS timeout, not-found, peer
 	// unreachable). The content may be published or become reachable later, so

@@ -2,6 +2,7 @@ package sidetree
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -1539,7 +1540,10 @@ func TestProcessFilterDIDs(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			p, err := Processor(
-				operations.Anchor{Anchor: "1.core-index-uri"},
+				// Declares 4 operations: 1 create + 1 recover + 1 deactivate
+				// (core) + 1 update (provisional), matching the fixture so the
+				// anchored-count cross-check passes.
+				operations.Anchor{Anchor: "4.core-index-uri"},
 				WithCAS(test.cas),
 				WithPrefix("test"),
 				WithDIDs(test.filter),
@@ -1561,5 +1565,148 @@ func TestProcessFilterDIDs(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+// TestProcessorOperationLimit verifies the unconditional per-anchor
+// operation-count enforcement (the P0 consensus rule, #28): a spec-compliant
+// ION node rejects the entire batch when the anchor-string operation count
+// violates the value-time-lock limits. The rejection must be permanent
+// (ErrMalformed), so the observer skips the batch rather than retrying it.
+func TestProcessorOperationLimit(t *testing.T) {
+	casWith := func(t *testing.T, cid string, ci CoreIndexFile) CAS {
+		t.Helper()
+		cas := NewTestCAS()
+		b, err := json.Marshal(ci)
+		if err != nil {
+			t.Fatalf("failed to marshal core index: %v", err)
+		}
+		cas.insertObject(cid, b)
+		return cas
+	}
+
+	accept := ValueLocking(func(string, int, int, string) bool { return true })
+	reject := ValueLocking(func(string, int, int, string) bool { return false })
+
+	tests := map[string]struct {
+		anchor    operations.AnchorString
+		coreIndex CoreIndexFile
+		valueLock ValueLocking
+		wantErr   error
+	}{
+		"zero declared count rejects": {
+			anchor:    "0.cid",
+			coreIndex: CoreIndexFile{},
+			wantErr:   ErrInvalidOperationCount,
+		},
+		"non-numeric declared count rejects": {
+			anchor:    "abc.cid",
+			coreIndex: CoreIndexFile{},
+			wantErr:   ErrInvalidOperationCount,
+		},
+		"negative declared count rejects": {
+			anchor:    "-5.cid",
+			coreIndex: CoreIndexFile{},
+			wantErr:   ErrInvalidOperationCount,
+		},
+		"at no-lock limit accepts": {
+			anchor:    "100.cid",
+			coreIndex: CoreIndexFile{},
+			wantErr:   nil,
+		},
+		"over no-lock limit without a lock rejects": {
+			anchor:    "101.cid",
+			coreIndex: CoreIndexFile{},
+			wantErr:   ErrOperationLimitExceeded,
+		},
+		"over batch max without a lock rejects": {
+			anchor:    "10001.cid",
+			coreIndex: CoreIndexFile{},
+			wantErr:   ErrTooManyOperations,
+		},
+		"over batch max rejects even with a verified lock": {
+			anchor:    "10001.cid",
+			coreIndex: CoreIndexFile{WriterLockId: "lock-123"},
+			valueLock: accept,
+			wantErr:   ErrTooManyOperations,
+		},
+		"over quota with a lock but no verifier rejects": {
+			anchor:    "200.cid",
+			coreIndex: CoreIndexFile{WriterLockId: "lock-123"},
+			wantErr:   ErrUnverifiableValueLock,
+		},
+		"over quota with a verifier that accepts is allowed": {
+			anchor:    "200.cid",
+			coreIndex: CoreIndexFile{WriterLockId: "lock-123"},
+			valueLock: accept,
+			wantErr:   nil,
+		},
+		"over quota with a verifier that rejects is rejected": {
+			anchor:    "200.cid",
+			coreIndex: CoreIndexFile{WriterLockId: "lock-123"},
+			valueLock: reject,
+			wantErr:   fmt.Errorf("value lock is not valid"),
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			cas := casWith(t, test.anchor.CID(), test.coreIndex)
+			opts := []SideTreeOption{WithCAS(cas), WithPrefix("test")}
+			if test.valueLock != nil {
+				opts = append(opts, WithFeeFunctions(test.valueLock))
+			}
+
+			p, err := Processor(operations.Anchor{Anchor: test.anchor}, opts...)
+			if err != nil {
+				t.Fatalf("expected no error creating processor, got %v", err)
+			}
+
+			got := p.Process()
+			if !checkError(got.Error, test.wantErr) {
+				t.Errorf("expected error %v, got %v", test.wantErr, got.Error)
+			}
+			// Every rejection must be classified permanent (ErrMalformed).
+			if test.wantErr != nil && !errors.Is(got.Error, ErrMalformed) {
+				t.Errorf("expected rejection to be ErrMalformed (permanent), got %v", got.Error)
+			}
+		})
+	}
+}
+
+// TestProcessorAnchoredCountExceedsDeclared verifies the anti-bypass
+// cross-check: a writer that understates the anchor-string operation count to
+// pass the limit gate while packing more operations into the anchored files is
+// still rejected once every file is parsed.
+func TestProcessorAnchoredCountExceedsDeclared(t *testing.T) {
+	cas := NewTestCAS()
+
+	ci := CoreIndexFile{}
+	for i := 0; i <= MaxNumberOfOperationsForNoValueTimeLock; i++ { // 101 distinct creates
+		ci.Operations.Create = append(ci.Operations.Create, CreateOperation{
+			SuffixData: did.SuffixData{
+				DeltaHash:          fmt.Sprintf("delta-%d", i),
+				RecoveryCommitment: "recovery-commitment",
+			},
+		})
+	}
+	b, err := json.Marshal(ci)
+	if err != nil {
+		t.Fatalf("failed to marshal core index: %v", err)
+	}
+	cas.insertObject("cid", b)
+
+	// Anchor string declares only 1 operation but the file packs 101.
+	p, err := Processor(operations.Anchor{Anchor: "1.cid"}, WithCAS(cas), WithPrefix("test"))
+	if err != nil {
+		t.Fatalf("expected no error creating processor, got %v", err)
+	}
+
+	got := p.Process()
+	if !checkError(got.Error, ErrOperationCountMismatch) {
+		t.Errorf("expected %v, got %v", ErrOperationCountMismatch, got.Error)
+	}
+	if !errors.Is(got.Error, ErrMalformed) {
+		t.Errorf("expected rejection to be ErrMalformed (permanent), got %v", got.Error)
 	}
 }
