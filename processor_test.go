@@ -1710,3 +1710,95 @@ func TestProcessorAnchoredCountExceedsDeclared(t *testing.T) {
 		t.Errorf("expected rejection to be ErrMalformed (permanent), got %v", got.Error)
 	}
 }
+
+// TestProcessorRejectsOversizedFile verifies the defensive size guard (#31): if
+// a CAS returns a (decompressed) file larger than the protocol per-file cap ×
+// MaxMemoryDecompressionFactor, the batch is permanently rejected (ErrMalformed)
+// rather than parsed. Uses the core index file, whose cap is the smallest.
+func TestProcessorRejectsOversizedFile(t *testing.T) {
+	cas := NewTestCAS()
+	oversized := make([]byte, MaxCoreIndexFileSizeInBytes*MaxMemoryDecompressionFactor+1)
+	cas.insertObject("cid", oversized)
+
+	p, err := Processor(operations.Anchor{Anchor: "1.cid"}, WithCAS(cas), WithPrefix("test"))
+	if err != nil {
+		t.Fatalf("expected no error creating processor, got %v", err)
+	}
+
+	got := p.Process()
+	if !checkError(got.Error, ErrFileTooLarge) {
+		t.Errorf("expected %v, got %v", ErrFileTooLarge, got.Error)
+	}
+	if !errors.Is(got.Error, ErrMalformed) {
+		t.Errorf("expected rejection to be ErrMalformed (permanent), got %v", got.Error)
+	}
+}
+
+// TestFetchPassesPerFileSizeCaps verifies that each fetch path passes the
+// correct protocol per-file cap to CAS.Get (#31), exercising all five Sidetree
+// files in one batch. The TestCAS records the maxSizeInBytes it was called with
+// per URI.
+func TestFetchPassesPerFileSizeCaps(t *testing.T) {
+	cas := NewTestCAS()
+
+	insert := func(uri string, v interface{}) {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("failed to marshal %s: %v", uri, err)
+		}
+		cas.insertObject(uri, b)
+	}
+
+	// create + recover + update => 3 chunk deltas; deactivate has no delta.
+	insert("chunk-uri", ChunkFile{Deltas: []did.Delta{{}, {}, {}}})
+	insert("prov-proof-uri", ProvisionalProofFile{
+		Operations: ProvProofOperations{Update: []SignedUpdateDataOp{{SignedData: "signed-data"}}},
+	})
+	insert("prov-index-uri", ProvisionalIndexFile{
+		ProvisionalProofURI: "prov-proof-uri",
+		Operations:          ProvOPS{Update: []Operation{{DIDSuffix: "update-did", RevealValue: "reveal-value"}}},
+		Chunks:              []ProvChunk{{ChunkFileURI: "chunk-uri"}},
+	})
+	insert("core-proof-uri", CoreProofFile{
+		Operations: CoreProofOperations{
+			Recover:    []SignedRecoverDataOp{{SignedData: "signed-data"}},
+			Deactivate: []SignedDeactivateDataOp{{SignedData: "signed-data"}},
+		},
+	})
+	insert("core-index-uri", CoreIndexFile{
+		ProvisionalIndexURI: "prov-index-uri",
+		CoreProofURI:        "core-proof-uri",
+		Operations: CoreOperations{
+			Recover:    []Operation{{DIDSuffix: "recover-did"}},
+			Deactivate: []Operation{{DIDSuffix: "deactivate-did"}},
+			Create:     []CreateOperation{{SuffixData: did.SuffixData{DeltaHash: "abc123", RecoveryCommitment: "xyz789"}}},
+		},
+	})
+
+	// 4 operations (create + recover + deactivate + update).
+	p, err := Processor(operations.Anchor{Anchor: "4.core-index-uri"}, WithCAS(cas), WithPrefix("test"))
+	if err != nil {
+		t.Fatalf("expected no error creating processor, got %v", err)
+	}
+	if got := p.Process(); got.Error != nil {
+		t.Fatalf("expected the batch to process cleanly, got %v", got.Error)
+	}
+
+	want := map[string]int{
+		"core-index-uri": MaxCoreIndexFileSizeInBytes,
+		"core-proof-uri": MaxProofFileSizeInBytes,
+		"prov-index-uri": MaxProvisionalIndexFileSizeInBytes,
+		"prov-proof-uri": MaxProofFileSizeInBytes,
+		"chunk-uri":      MaxChunkFileSizeInBytes,
+	}
+	for uri, cap := range want {
+		got, ok := cas.maxSizes[uri]
+		if !ok {
+			t.Errorf("%s was never fetched", uri)
+			continue
+		}
+		if got != cap {
+			t.Errorf("%s fetched with cap %d, want %d", uri, got, cap)
+		}
+	}
+}
