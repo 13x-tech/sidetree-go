@@ -125,3 +125,70 @@ func TestSideTreeProcessOperations(t *testing.T) {
 		})
 	}
 }
+
+// TestProcessOperationsForwardsFeeFunctions guards the dropped-seam bug: a
+// SideTree built WithFeeFunctions must forward those callbacks to every
+// per-anchor Processor, so the per-operation-fee and value-lock checks actually
+// fire during ProcessOperations. Before the fix the callbacks were silently
+// dropped and a >100-op / unlocked anchor would be accepted regardless.
+func TestProcessOperationsForwardsFeeFunctions(t *testing.T) {
+	op := operations.Anchor{Sequence: "1:abc:1:abc", Anchor: "1.abc"}
+
+	tests := map[string]struct {
+		valueLock ValueLocking
+		perOpFee  PerOperationFee
+		wantErr   error
+	}{
+		"value lock rejects": {
+			valueLock: func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool { return false },
+			wantErr:   fmt.Errorf("value lock is not valid"),
+		},
+		"per op fee rejects": {
+			perOpFee: func(baseFee int, opCount int, anchorPoint string) bool { return false },
+			wantErr:  fmt.Errorf("per op fee is not valid"),
+		},
+		"callbacks accept": {
+			valueLock: func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool { return true },
+			perOpFee:  func(baseFee int, opCount int, anchorPoint string) bool { return true },
+			wantErr:   nil,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			cas := NewTestCAS()
+			cas.insertObject("abc", []byte("{}")) // valid, empty core index file
+
+			called := false
+			opts := []SideTreeOption{WithPrefix("test"), WithCAS(cas)}
+			var fns []interface{}
+			if test.valueLock != nil {
+				vl := test.valueLock
+				fns = append(fns, ValueLocking(func(writerLockId string, baseFee int, opCount int, anchorPoint string) bool {
+					called = true
+					return vl(writerLockId, baseFee, opCount, anchorPoint)
+				}))
+			}
+			if test.perOpFee != nil {
+				po := test.perOpFee
+				fns = append(fns, PerOperationFee(func(baseFee int, opCount int, anchorPoint string) bool {
+					called = true
+					return po(baseFee, opCount, anchorPoint)
+				}))
+			}
+			opts = append(opts, WithFeeFunctions(fns...))
+
+			st := New(opts...)
+			opMap, err := st.ProcessOperations([]operations.Anchor{op}, nil)
+			if err != nil {
+				t.Fatalf("unexpected top-level error: %v", err)
+			}
+			if !called {
+				t.Fatal("fee/value-lock callback was not forwarded to the per-anchor processor")
+			}
+			if !checkError(opMap[op].Error, test.wantErr) {
+				t.Errorf("expected per-anchor error %v, got %v", test.wantErr, opMap[op].Error)
+			}
+		})
+	}
+}
